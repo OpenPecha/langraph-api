@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tibetan Buddhist Text Translation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #eee;
+            padding: 20px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 0.9em;
+            margin: 0;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: 500px;
+        }
+
+        .input-section, .output-section {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .input-section {
+            border-right: 1px solid #eee;
+        }
+
+        .section-title {
+            font-size: 1.1em;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .setting-group label {
+            font-weight: 400;
+            margin-bottom: 4px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        select, input {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9em;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
+        .input-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        textarea {
+            flex: 1;
+            min-height: 200px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 0.9em;
+            transition: border-color 0.2s;
+            line-height: 1.4;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #4a90e2;
+        }
+
+        .translate-btn {
+            background: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 12px;
+            transition: background-color 0.2s;
+        }
+
+        .translate-btn:hover:not(:disabled) {
+            background: #357abd;
+        }
+
+        .translate-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            margin: 12px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4a90e2;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            margin-top: 8px;
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .status-log {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.75em;
+            display: none;
+            border: 1px solid #eee;
+        }
+
+        .status-item {
+            padding: 5px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .results-container {
+            flex: 1;
+        }
+
+        .translation-result {
+            background: #fbfbfb;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 3px solid #4a90e2;
+        }
+
+        .original-text {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .translated-text {
+            color: #555;
+            font-size: 1em;
+            line-height: 1.5;
+        }
+
+        .text-meta {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            padding: 40px 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .settings {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #4a90e2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Buddhist Text Translation</h1>
+            <p>Enter texts line by line for translation</p>
+        </div>
+
+        <div class="main-content">
+            <div class="input-section">
+                <div class="section-title">
+                    Input
+                </div>
+
+                <div class="settings">
+                    <div class="setting-group">
+                        <label for="targetLanguage">Target Language</label>
+                        <select id="targetLanguage">
+                            <option value="English">English</option>
+                            <option value="Spanish">Spanish</option>
+                            <option value="French">French</option>
+                            <option value="German">German</option>
+                            <option value="Italian">Italian</option>
+                            <option value="Portuguese">Portuguese</option>
+                            <option value="Chinese">Chinese</option>
+                            <option value="Japanese">Japanese</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="textType">Text Type</label>
+                        <select id="textType">
+                            <option value="mantra">Mantra</option>
+                            <option value="sutra">Sutra</option>
+                            <option value="commentary">Commentary</option>
+                            <option value="practice_manual">Practice Manual</option>
+                            <option value="philosophical_treatise">Philosophical Treatise</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="model">Translation Model</label>
+                        <select id="model">
+                            <option value="claude">Claude (Recommended)</option>
+                            <option value="claude-haiku">Claude Haiku (Fast)</option>
+                            <option value="claude-opus">Claude Opus (Best)</option>
+                            <option value="gemini-pro">Gemini Pro</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-group">
+                        <label for="batchSize">Batch Size</label>
+                        <input type="number" id="batchSize" value="3" min="1" max="10">
+                    </div>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px;">
+                    <label for="userRules">User Rules (Optional)</label>
+                    <textarea 
+                        id="userRules" 
+                        placeholder="Enter any custom translation rules or instructions here (optional)..."
+                        style="min-height: 80px; max-height: 120px;"
+                    ></textarea>
+                </div>
+
+                <div class="input-area">
+                    <label for="inputText" style="margin-bottom: 10px; font-weight: 500;">
+                        Enter Buddhist texts (one per line):
+                    </label>
+                    <textarea 
+                        id="inputText" 
+                        placeholder="Enter your Buddhist texts here, one per line:
+
+OM MANI PADME HUM
+May all beings be happy
+Compassion is the root of all virtue
+The mind is the source of happiness and suffering
+Form is emptiness, emptiness is form"
+                    ></textarea>
+                    
+                    <button id="translateBtn" class="translate-btn">
+                        Translate
+                    </button>
+                </div>
+
+                <div class="progress-container" id="progressContainer">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Starting translation...</div>
+                </div>
+
+                <div class="status-log" id="statusLog"></div>
+            </div>
+
+            <div class="output-section">
+                <div class="section-title">
+                    Output
+                    <span id="resultCount" style="font-size: 0.8em; color: #888;"></span>
+                </div>
+
+                <div class="results-container" id="resultsContainer">
+                    <div class="empty-state">
+                        Translations will appear here as they complete in real-time
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TranslationUI {
+            constructor() {
+                this.isTranslating = false;
+                this.eventSource = null;
+                this.results = [];
+                
+                this.initializeElements();
+                this.attachEventListeners();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    inputText: document.getElementById('inputText'),
+                    targetLanguage: document.getElementById('targetLanguage'),
+                    textType: document.getElementById('textType'),
+                    model: document.getElementById('model'),
+                    batchSize: document.getElementById('batchSize'),
+                    userRules: document.getElementById('userRules'),
+                    translateBtn: document.getElementById('translateBtn'),
+                    progressContainer: document.getElementById('progressContainer'),
+                    progressFill: document.getElementById('progressFill'),
+                    progressText: document.getElementById('progressText'),
+                    statusLog: document.getElementById('statusLog'),
+                    resultsContainer: document.getElementById('resultsContainer'),
+                    resultCount: document.getElementById('resultCount')
+                };
+            }
+
+            attachEventListeners() {
+                this.elements.translateBtn.addEventListener('click', () => this.startTranslation());
+                
+                // Auto-resize textarea
+                this.elements.inputText.addEventListener('input', (e) => {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                });
+            }
+
+            startTranslation() {
+                if (this.isTranslating) return;
+
+                const texts = this.elements.inputText.value
+                    .split('\n')
+                    .map(text => text.trim())
+                    .filter(text => text.length > 0);
+
+                if (texts.length === 0) {
+                    alert('Please enter some texts to translate (one per line)');
+                    return;
+                }
+
+                this.isTranslating = true;
+                this.results = [];
+                this.updateUI();
+                this.clearResults();
+                this.showProgress();
+
+                const requestData = {
+                    texts: texts,
+                    target_language: this.elements.targetLanguage.value,
+                    text_type: this.elements.textType.value,
+                    model_name: this.elements.model.value,
+                    batch_size: parseInt(this.elements.batchSize.value),
+                    user_rules: this.elements.userRules.value.trim() || null
+                };
+
+                this.connectToStream(requestData);
+            }
+
+            connectToStream(requestData) {
+                // Use fetch with streaming for POST request with body
+                fetch('http://0.0.0.0:8001/translate/stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    },
+                    body: JSON.stringify(requestData)
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            this.onStreamComplete();
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    let jsonStr = line.slice(6).trim();
+                                    
+                                    // Handle double "data: " prefix issue
+                                    if (jsonStr.startsWith('data: ')) {
+                                        jsonStr = jsonStr.slice(6).trim();
+                                    }
+                                    
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        this.handleStreamEvent(data);
+                                    }
+                                } catch (e) {
+                                    console.log('Skipping invalid JSON:', line, 'Error:', e.message);
+                                }
+                            }
+                        }
+                        
+                        return reader.read().then(processStream);
+                    };
+                    
+                    return reader.read().then(processStream);
+                }).catch(error => {
+                    console.error('Translation error:', error);
+                    this.onStreamError(error.message);
+                });
+            }
+
+            handleStreamEvent(data) {
+                console.log('Stream event:', data); // Debug logging
+                this.addStatusLog(data);
+                
+                switch (data.type) {
+                    case 'initialization':
+                        this.updateProgress(0, `Starting translation of ${data.total_texts} texts...`);
+                        break;
+                        
+                    case 'planning':
+                        this.updateProgress(5, `Created ${data.total_batches} batches`);
+                        break;
+                        
+                    case 'batch_start':
+                        this.updateProgress(
+                            data.progress_percent || 0, 
+                            `Processing batch ${data.batch_number}...`
+                        );
+                        break;
+                        
+                    case 'translation_start':
+                        this.updateProgress(null, 'Translating...');
+                        break;
+                        
+                    case 'text_completed':
+                        this.updateProgress(
+                            data.progress_percent || 0,
+                            `Completed ${data.text_number}/${data.total_texts} texts`
+                        );
+                        
+                        // Add partial result if we have translation preview
+                        if (data.translation_preview) {
+                            this.addPartialResult(data.text_number, data.translation_preview);
+                        }
+                        break;
+                        
+                    case 'batch_completed':
+                        this.updateProgress(
+                            data.cumulative_progress || 0,
+                            `Batch ${data.batch_number} completed in ${data.processing_time}s`
+                        );
+                        
+                        // Display batch results immediately
+                        if (data.batch_results && data.batch_results.length > 0) {
+                            console.log('Adding batch results:', data.batch_results);
+                            this.results.push(...data.batch_results);
+                            this.renderResults();
+                            this.elements.resultCount.textContent = `(${this.results.length} translations)`;
+                        }
+                        break;
+                        
+                    case 'completion':
+                        console.log('Completion event - all batches done'); // Debug
+                        this.updateProgress(100, 'Translation completed!');
+                        
+                        // Final update of result count (results already populated from batches)
+                        this.elements.resultCount.textContent = `(${this.results.length} translations completed)`;
+                        
+                        setTimeout(() => this.onStreamComplete(), 1000); // Delay completion
+                        break;
+                        
+                    case 'error':
+                        console.error('Stream error:', data.error);
+                        this.onStreamError(data.error);
+                        break;
+                        
+                    default:
+                        console.log('Unknown event type:', data.type);
+                }
+            }
+
+            updateProgress(percent, text) {
+                if (percent !== null) {
+                    this.elements.progressFill.style.width = `${percent}%`;
+                }
+                this.elements.progressText.textContent = text;
+            }
+
+            addStatusLog(data) {
+                const statusItem = document.createElement('div');
+                statusItem.className = 'status-item';
+                statusItem.textContent = `[${data.timestamp.split('T')[1].split('.')[0]}] ${data.type}: ${data.status || JSON.stringify(data)}`;
+                
+                this.elements.statusLog.appendChild(statusItem);
+                this.elements.statusLog.scrollTop = this.elements.statusLog.scrollHeight;
+            }
+
+            addPartialResult(textNumber, translationPreview) {
+                // This could show partial results as they come in
+                // For now, we'll wait for final results
+            }
+
+            displayFinalResults(results) {
+                console.log('Displaying final results:', results); // Debug
+                this.results = results || [];
+                this.renderResults();
+                this.elements.resultCount.textContent = `(${this.results.length} translations)`;
+            }
+
+            renderResults() {
+                console.log('Rendering results:', this.results); // Debug
+                
+                if (!this.results || this.results.length === 0) {
+                    this.elements.resultsContainer.innerHTML = '<div class="empty-state">No translations yet</div>';
+                    return;
+                }
+
+                const resultsHTML = this.results
+                    .map((result, index) => {
+                        console.log('Rendering result:', index, result); // Debug
+                        return `
+                            <div class="translation-result">
+                                <div class="original-text">
+                                    ${index + 1}. ${this.escapeHtml(result.original_text || 'No original text')}
+                                </div>
+                                <div class="translated-text">
+                                    ${this.escapeHtml(result.translated_text || 'No translation')}
+                                </div>
+                                <div class="text-meta">
+                                    Model: ${result.metadata?.model_used || 'Unknown'} • Type: ${result.metadata?.text_type || 'Unknown'}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                
+                console.log('Setting results HTML:', resultsHTML); // Debug
+                this.elements.resultsContainer.innerHTML = resultsHTML;
+            }
+
+            clearResults() {
+                this.results = [];
+                this.elements.resultsContainer.innerHTML = '<div class="empty-state">Translations will appear here...</div>';
+                this.elements.resultCount.textContent = '';
+                this.elements.statusLog.innerHTML = '';
+            }
+
+            showProgress() {
+                this.elements.progressContainer.style.display = 'block';
+                this.elements.statusLog.style.display = 'block';
+            }
+
+            hideProgress() {
+                this.elements.progressContainer.style.display = 'none';
+                this.elements.statusLog.style.display = 'none';
+            }
+
+            updateUI() {
+                this.elements.translateBtn.disabled = this.isTranslating;
+                this.elements.translateBtn.innerHTML = this.isTranslating 
+                    ? '<span class="loading"></span> Translating...'
+                    : 'Translate';
+            }
+
+            onStreamComplete() {
+                this.isTranslating = false;
+                this.updateUI();
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
+                
+                // Keep progress visible for longer, and only hide if we have results
+                setTimeout(() => {
+                    if (this.results.length > 0) {
+                        this.hideProgress();
+                    }
+                }, 5000);
+            }
+
+            onStreamError(errorMessage) {
+                console.error('Stream error:', errorMessage);
+                this.updateProgress(null, `Error: ${errorMessage}`);
+                this.onStreamComplete();
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            new TranslationUI();
+        });
+    </script>
+</body>
+</html>

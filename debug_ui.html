@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Translation Streaming</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .log { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .results { background: #e8f5e8; padding: 15px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Debug Translation Streaming</h1>
+    
+    <button onclick="startTest()">Test Single Text Translation</button>
+    <button onclick="startBatchTest()">Test Batch Translation</button>
+    <button onclick="clearLogs()">Clear Logs</button>
+    
+    <h3>Raw Stream Data:</h3>
+    <div id="rawLog"></div>
+    
+    <h3>Parsed Events:</h3>
+    <div id="eventLog"></div>
+    
+    <h3>Final Results:</h3>
+    <div id="resultsDiv"></div>
+
+    <script>
+        let logDiv = document.getElementById('rawLog');
+        let eventDiv = document.getElementById('eventLog');
+        let resultsDiv = document.getElementById('resultsDiv');
+        
+        function log(message) {
+            logDiv.innerHTML += '<div class="log">' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function logEvent(event) {
+            eventDiv.innerHTML += '<div class="log">EVENT: ' + JSON.stringify(event, null, 2) + '</div>';
+            eventDiv.scrollTop = eventDiv.scrollHeight;
+        }
+        
+        function clearLogs() {
+            logDiv.innerHTML = '';
+            eventDiv.innerHTML = '';
+            resultsDiv.innerHTML = '';
+        }
+        
+        function startTest() {
+            log('Starting single text test...');
+            
+            const requestData = {
+                text: "OM MANI PADME HUM",
+                target_language: "English",
+                model_name: "claude",
+                text_type: "mantra"
+            };
+            
+            testStream('/translate/single/stream', requestData);
+        }
+        
+        function startBatchTest() {
+            log('Starting batch test...');
+            
+            const requestData = {
+                texts: ["May all beings be happy", "Compassion is the root of all virtue"],
+                target_language: "Spanish",
+                model_name: "claude",
+                text_type: "practice_manual",
+                batch_size: 2
+            };
+            
+            testStream('/translate/stream', requestData);
+        }
+        
+        function testStream(endpoint, requestData) {
+            log('Sending request to: ' + endpoint);
+            log('Request data: ' + JSON.stringify(requestData, null, 2));
+            
+            fetch('http://0.0.0.0:8001' + endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify(requestData)
+            }).then(response => {
+                log('Response status: ' + response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                function processStream({ done, value }) {
+                    if (done) {
+                        log('Stream completed');
+                        return;
+                    }
+                    
+                    const chunk = decoder.decode(value);
+                    log('Raw chunk: ' + JSON.stringify(chunk));
+                    
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            log('Line: ' + JSON.stringify(line));
+                            
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const jsonStr = line.slice(6).trim();
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        logEvent(data);
+                                        
+                                        if (data.type === 'completion' && data.results) {
+                                            resultsDiv.innerHTML = '<div class="results"><h4>Final Results:</h4><pre>' + 
+                                                JSON.stringify(data.results, null, 2) + '</pre></div>';
+                                        }
+                                    }
+                                } catch (e) {
+                                    log('JSON parse error: ' + e.message + ' for line: ' + line);
+                                }
+                            }
+                        }
+                    }
+                    
+                    return reader.read().then(processStream);
+                }
+                
+                return reader.read().then(processStream);
+            }).catch(error => {
+                log('Error: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
