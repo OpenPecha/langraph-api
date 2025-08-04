@@ -444,8 +444,18 @@ Form is emptiness, emptiness is form"
             }
 
             connectToStream(requestData) {
+                // Dynamically determine base URL
+                let baseUrl = window.location.href;
+                
+                // Remove /static/index.html if present
+                if (baseUrl.includes('/static/index.html')) {
+                    baseUrl = baseUrl.replace('/static/index.html', '');
+                }
+                
+                const apiUrl = `${baseUrl}/translate/stream`;
+                
                 // Use fetch with streaming for POST request with body
-                fetch('https://lang-translator-api.onrender.com/translate/stream', {
+                fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
