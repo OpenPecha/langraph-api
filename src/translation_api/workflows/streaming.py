@@ -54,6 +54,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
         "batch_size": request.batch_size
     }).to_sse_format()
     
+    # Yield control to event loop
+    await asyncio.sleep(0)
+    
     # Create batches
     batch_size = min(request.batch_size, 50)  # Max batch size
     batches = []
@@ -72,6 +75,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
         "total_batches": len(batches),
         "batch_size": batch_size
     }).to_sse_format()
+    
+    # Yield control to event loop
+    await asyncio.sleep(0)
     
     # Process each batch
     all_results = []
@@ -93,6 +99,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                 "progress_percent": int((processed_texts / total_texts) * 100)
             }).to_sse_format()
             
+            # Yield control to event loop
+            await asyncio.sleep(0)
+            
             try:
                 if len(batch["texts"]) == 1:
                     # Single text translation
@@ -108,6 +117,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                         "status": "translating_single_text",
                         "text_preview": batch["texts"][0][:50] + "..." if len(batch["texts"][0]) > 50 else batch["texts"][0]
                     }).to_sse_format()
+                    
+                    # Yield control to event loop
+                    await asyncio.sleep(0)
                     
                     message = HumanMessage(content=prompt)
                     response = model.invoke([message])
@@ -139,6 +151,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                         "status": "translating_batch",
                         "batch_size": len(batch["texts"])
                     }).to_sse_format()
+                    
+                    # Yield control to event loop
+                    await asyncio.sleep(0)
                     
                     message = HumanMessage(content=prompt)
                     response = model.invoke([message])
@@ -172,6 +187,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                             "progress_percent": int((processed_texts / total_texts) * 100),
                             "translation_preview": clean_translation[:100] + "..." if len(clean_translation) > 100 else clean_translation
                         }).to_sse_format()
+                        
+                        # Yield control to event loop
+                        await asyncio.sleep(0)
                 
                 # Update processed count for single text
                 if len(batch["texts"]) == 1:
@@ -205,6 +223,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                     ]
                 }).to_sse_format()
                 
+                # Yield control to event loop
+                await asyncio.sleep(0)
+                
             except Exception as e:
                 # Emit batch error
                 yield ProgressEvent("batch_error", {
@@ -213,6 +234,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                     "batch_id": batch["batch_id"],
                     "error": str(e)
                 }).to_sse_format()
+                
+                # Yield control to event loop
+                await asyncio.sleep(0)
                 
                 # Skip failed texts in progress count
                 processed_texts += len(batch["texts"])
@@ -235,6 +259,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
             ]
         }).to_sse_format()
         
+        # Yield control to event loop
+        await asyncio.sleep(0)
+        
     except Exception as e:
         # Emit global error
         yield ProgressEvent("error", {
@@ -243,6 +270,9 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
             "processed_texts": processed_texts,
             "total_texts": total_texts
         }).to_sse_format()
+        
+        # Yield control to event loop
+        await asyncio.sleep(0)
 
 
 async def stream_single_translation_progress(
@@ -281,3 +311,6 @@ async def stream_single_translation_progress(
     
     async for event in stream_translation_progress(request):
         yield event
+        
+        # Yield control to event loop
+        await asyncio.sleep(0)
