@@ -3,6 +3,7 @@
 import asyncio
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,15 @@ from .models.glossary import Glossary, GlossaryTerm
 from .workflows.streaming import stream_translation_progress, stream_single_translation_progress
 from .models.model_router import get_model_router
 from .config import get_settings
+from .models.standardization import (
+    AnalysisRequest, 
+    AnalysisResponse, 
+    StandardizationRequest, 
+    StandardizationResponse,
+    RetranslationResponse,
+    StandardizationInputItem
+)
+from .prompts.tibetan_buddhist import RETRANSLATION_PROMPT
 
 # Import from root level graph module
 import sys
@@ -23,6 +33,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from graph import run_translation_workflow
+from .cache import get_cache
 
 
 class TranslationAPIRequest(BaseModel):
@@ -105,6 +116,17 @@ async def health_check():
     )
 
 
+@app.post("/system/clear-cache", tags=["System"])
+async def clear_cache():
+    """
+    Clear the in-memory cache for translations and glossaries.
+    
+    This is useful for ensuring fresh results from the language model,
+    especially after changing a model or prompt.
+    """
+    cache = get_cache()
+    cache.clear_all()
+    return {"status": "success", "message": "Cache cleared."}
 
 
 @app.post(
@@ -247,12 +269,74 @@ async def translate_single_text(request: SingleTranslationRequest):
     tags=["Streaming"],
     responses={
         200: {
-            "description": "A stream of Server-Sent Events (SSE).",
+            "description": """
+A stream of Server-Sent Events (SSE). Each event is a JSON object prefixed with `data: `.
+Below are examples of the key event types.
+
+**Event Type: `initialization`**
+```json
+{
+  "timestamp": "...",
+  "type": "initialization",
+  "status": "starting",
+  "total_texts": 5
+}
+```
+
+**Event Type: `batch_completed`** (sent after each batch of translations)
+```json
+{
+  "timestamp": "...",
+  "type": "batch_completed",
+  "status": "batch_completed",
+  "batch_results": [
+    {
+      "original_text": "...",
+      "translated_text": "...",
+      "metadata": {}
+    }
+  ]
+}
+```
+
+**Event Type: `glossary_extraction_start`** (sent after all translations are done)
+```json
+{
+  "timestamp": "...",
+  "type": "glossary_extraction_start",
+  "status": "extracting_glossary",
+  "message": "..."
+}
+```
+
+**Event Type: `glossary_extraction_completed`** (sent after all glossaries are extracted)
+```json
+{
+  "timestamp": "...",
+  "type": "glossary_extraction_completed",
+  "status": "glossary_extracted",
+  "glossary": {
+    "terms": [{"source_term": "...", "translated_term": "..."}]
+  }
+}
+```
+
+**Event Type: `completion`** (the final event)
+```json
+{
+  "timestamp": "...",
+  "type": "completion",
+  "status": "completed",
+  "total_texts": 5,
+  "results": [...],
+  "glossary": {...}
+}
+```
+            """,
             "content": {
                 "text/event-stream": {
                     "schema": {
-                        "type": "string",
-                        "example": 'data: {"timestamp":"...","type":"completion","status":"completed",...}\n\n'
+                        "type": "string"
                     }
                 }
             }
@@ -369,6 +453,97 @@ async def web_ui():
     return RedirectResponse(url="/static/index.html")
 
 
+# --- Standardization Endpoints ---
+
+@app.post("/standardize/analyze", response_model=AnalysisResponse, tags=["Standardization"])
+async def analyze_consistency(request: AnalysisRequest):
+    """
+    Analyze a list of translations to find inconsistent glossary terms.
+    
+    This endpoint takes a list of translation results (each with its own glossary)
+    and returns a dictionary of source terms that have more than one unique translation,
+    making it easy to identify inconsistencies.
+    """
+    term_map = defaultdict(set)
+
+    for item in request.items:
+        if item.glossary:
+            for term in item.glossary:
+                term_map[term.source_term].add(term.translated_term)
+    
+    inconsistent_terms = {
+        term: list(translations)
+        for term, translations in term_map.items()
+        if len(translations) > 1
+    }
+    
+    return AnalysisResponse(inconsistent_terms=inconsistent_terms)
+
+
+@app.post("/standardize/apply", response_model=StandardizationResponse, tags=["Standardization"])
+async def apply_standardization(request: StandardizationRequest):
+    """
+    Apply a set of standardization rules to a list of translations.
+
+    This endpoint intelligently re-translates only the necessary texts
+    to enforce the provided standardization rules, while making minimal
+    changes to the rest of the text.
+    """
+    model_router = get_model_router()
+    try:
+        model = model_router.get_model(request.model_name)
+        structured_model = model.with_structured_output(RetranslationResponse)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Prepare standardization rules for faster lookup and for the prompt
+    source_words_to_standardize = {pair.source_word for pair in request.standardization_pairs}
+    rules_block = ""
+    for pair in request.standardization_pairs:
+        rules_block += f'- For the source term "{pair.source_word}", use the exact translation "{pair.standardized_translation}".\n'
+
+    updated_items = []
+    for item in request.items:
+        # Check if this item's original text contains any of the words to be standardized
+        if any(word in item.original_text for word in source_words_to_standardize):
+            # This item needs to be re-translated
+            prompt = RETRANSLATION_PROMPT.format(
+                user_rules=request.user_rules or "No specific user rules provided.",
+                standardization_rules_block=rules_block,
+                original_text=item.original_text,
+                original_translation=item.translated_text
+            )
+            
+            try:
+                # Get the new translation
+                response = await structured_model.ainvoke(prompt)
+                new_translation = response.new_translation
+                
+                # Update the item's translation
+                item.translated_text = new_translation
+
+                # Update the glossary for this item
+                # A simple approach: re-extract the glossary for the new pair
+                glossary_terms = []
+                glossary_model = model.with_structured_output(Glossary)
+                glossary_prompt = GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT.format(
+                    text_pairs=f"Source: {item.original_text}\\nTranslated: {new_translation}\\n\\n"
+                )
+                glossary_result = await glossary_model.ainvoke(glossary_prompt)
+                if glossary_result and glossary_result.terms:
+                    item.glossary = glossary_result.terms
+                else:
+                    item.glossary = []
+
+            except Exception as e:
+                # If re-translation fails, you could either keep the original,
+                # or mark it as failed. For now, we'll just log and keep original.
+                # In a real app, you might add an error flag to the item.
+                print(f"Failed to re-translate item: {e}")
+        
+        updated_items.append(item)
+
+    return StandardizationResponse(updated_items=updated_items)
 
 
 def create_app() -> FastAPI:

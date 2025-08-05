@@ -150,6 +150,22 @@
             cursor: not-allowed;
         }
 
+        .clear-cache-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+
+        .clear-cache-btn:hover {
+            background: #c82333;
+        }
+
         .progress-container {
             margin: 12px 0;
             display: none;
@@ -304,6 +320,72 @@
             font-weight: 500;
         }
 
+        .standardization-container {
+            padding: 20px;
+            margin-top: 20px;
+            border-top: 2px solid #ddd;
+        }
+        
+        .analyze-btn, .apply-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .apply-btn {
+            background: #28a745;
+            margin-top: 15px;
+        }
+
+        .analyze-btn:hover, .apply-btn:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .apply-btn:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .apply-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .report-panel {
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+        }
+
+        .inconsistency-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        .inconsistency-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .inconsistency-item strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .inconsistency-item label {
+            display: block;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+
     </style>
 </head>
 <body>
@@ -361,7 +443,9 @@
                     </div>
                 </div>
 
-                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px;">
+                <button id="clearCacheBtn" class="clear-cache-btn" style="grid-column: 1 / -1;">Clear Server Cache</button>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px; margin-top: 20px;">
                     <label for="userRules">User Rules (Optional)</label>
                     <textarea 
                         id="userRules" 
@@ -412,6 +496,8 @@ Form is emptiness, emptiness is form"
                     </div>
                 </div>
 
+                <div id="standardizationContainer" style="display: none;"></div>
+
                 <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
                     Consolidated Glossary
                 </div>
@@ -429,6 +515,8 @@ Form is emptiness, emptiness is form"
                 this.eventSource = null;
                 this.results = [];
                 this.glossaryTerms = [];
+                this.inconsistentTerms = {};
+                this.standardizationSelections = {};
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -443,18 +531,21 @@ Form is emptiness, emptiness is form"
                     batchSize: document.getElementById('batchSize'),
                     userRules: document.getElementById('userRules'),
                     translateBtn: document.getElementById('translateBtn'),
+                    clearCacheBtn: document.getElementById('clearCacheBtn'),
                     progressContainer: document.getElementById('progressContainer'),
                     progressFill: document.getElementById('progressFill'),
                     progressText: document.getElementById('progressText'),
                     statusLog: document.getElementById('statusLog'),
                     resultsContainer: document.getElementById('resultsContainer'),
                     resultCount: document.getElementById('resultCount'),
-                    consolidatedGlossaryContainer: document.getElementById('consolidatedGlossaryContainer')
+                    consolidatedGlossaryContainer: document.getElementById('consolidatedGlossaryContainer'),
+                    standardizationContainer: document.getElementById('standardizationContainer')
                 };
             }
 
             attachEventListeners() {
                 this.elements.translateBtn.addEventListener('click', () => this.startTranslation());
+                this.elements.clearCacheBtn.addEventListener('click', () => this.handleClearCacheClick());
                 
                 // Auto-resize textarea
                 this.elements.inputText.addEventListener('input', (e) => {
@@ -648,6 +739,7 @@ Form is emptiness, emptiness is form"
                             this.renderResults(data.glossary);
                             this.renderConsolidatedGlossary(data.glossary);
                         }
+                        this.renderStandardizationWorkflow(); // Show Analyze button
 
                         setTimeout(() => this.onStreamComplete(), 1000);
                         break;
@@ -683,7 +775,34 @@ Form is emptiness, emptiness is form"
                 // For now, we'll wait for final results
             }
 
-            renderGlossary() {
+            async handleClearCacheClick() {
+                const btn = this.elements.clearCacheBtn;
+                const originalText = btn.textContent;
+                btn.textContent = 'Clearing...';
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch('/system/clear-cache', { method: 'POST' });
+                    if (!response.ok) throw new Error('Failed to clear cache.');
+                    const data = await response.json();
+                    
+                    btn.textContent = 'Cache Cleared!';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+
+                } catch (error) {
+                    console.error('Clear cache error:', error);
+                    btn.textContent = 'Error!';
+                     setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                }
+            }
+
+            renderGlossary(glossary) {
                 const container = this.elements.glossaryContainer;
 
                 if (this.glossaryTerms.length === 0) {
@@ -817,8 +936,145 @@ Form is emptiness, emptiness is form"
                 container.innerHTML = tableHtml;
             }
 
+            renderStandardizationWorkflow() {
+                this.elements.standardizationContainer.style.display = 'block';
+                this.elements.standardizationContainer.innerHTML = `
+                    <div class="standardization-container">
+                        <button id="analyzeBtn" class="analyze-btn">Analyze Translation Consistency</button>
+                        <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                    </div>
+                `;
+                document.getElementById('analyzeBtn').addEventListener('click', () => this.handleAnalyzeClick());
+            }
+
+            async handleAnalyzeClick() {
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                analyzeBtn.textContent = 'Analyzing...';
+                analyzeBtn.disabled = true;
+
+                const analysisRequest = {
+                    items: this.results.map(r => ({
+                        original_text: r.original_text,
+                        translated_text: r.translated_text,
+                        glossary: r.glossary || []
+                    }))
+                };
+
+                try {
+                    const response = await fetch('/standardize/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(analysisRequest)
+                    });
+                    if (!response.ok) throw new Error(`Analysis failed: ${response.statusText}`);
+                    
+                    const data = await response.json();
+                    this.inconsistentTerms = data.inconsistent_terms;
+                    this.renderInconsistencyReport();
+
+                } catch (error) {
+                    console.error('Analysis error:', error);
+                    alert(`Could not analyze inconsistencies: ${error.message}`);
+                } finally {
+                    analyzeBtn.style.display = 'none'; // Hide after analysis
+                }
+            }
+
+            renderInconsistencyReport() {
+                const panel = document.getElementById('reportPanel');
+                if (Object.keys(this.inconsistentTerms).length === 0) {
+                    panel.innerHTML = '<p>No inconsistencies found. All terms are standardized.</p>';
+                    panel.style.display = 'block';
+                    return;
+                }
+
+                let reportHtml = '';
+                for (const sourceTerm in this.inconsistentTerms) {
+                    const translations = this.inconsistentTerms[sourceTerm];
+                    reportHtml += `<div class="inconsistency-item" data-source-term="${sourceTerm}">
+                        <strong>Source Term: "${this.escapeHtml(sourceTerm)}"</strong>`;
+                    translations.forEach((translation, index) => {
+                        reportHtml += `
+                            <label>
+                                <input type="radio" name="standard_for_${sourceTerm}" value="${this.escapeHtml(translation)}">
+                                ${this.escapeHtml(translation)}
+                            </label>
+                        `;
+                    });
+                    reportHtml += `</div>`;
+                }
+
+                panel.innerHTML = reportHtml + `<button id="applyBtn" class="apply-btn" disabled>Apply Standardization</button>`;
+                panel.style.display = 'block';
+                
+                panel.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.addEventListener('change', () => this.handleStandardizationSelectionChange());
+                });
+                document.getElementById('applyBtn').addEventListener('click', () => this.handleApplyClick());
+            }
+
+            handleStandardizationSelectionChange() {
+                this.standardizationSelections = {};
+                document.querySelectorAll('.inconsistency-item').forEach(item => {
+                    const sourceTerm = item.dataset.sourceTerm;
+                    const selectedRadio = item.querySelector(`input[name="standard_for_${sourceTerm}"]:checked`);
+                    if (selectedRadio) {
+                        this.standardizationSelections[sourceTerm] = selectedRadio.value;
+                    }
+                });
+                document.getElementById('applyBtn').disabled = Object.keys(this.standardizationSelections).length === 0;
+            }
+
+            async handleApplyClick() {
+                const applyBtn = document.getElementById('applyBtn');
+                applyBtn.textContent = 'Applying...';
+                applyBtn.disabled = true;
+
+                const standardizationPairs = Object.entries(this.standardizationSelections).map(([source, standard]) => ({
+                    source_word: source,
+                    standardized_translation: standard
+                }));
+
+                const request = {
+                    items: this.results,
+                    standardization_pairs: standardizationPairs,
+                    model_name: this.elements.model.value,
+                    user_rules: this.elements.userRules.value.trim() || null
+                };
+
+                try {
+                    const response = await fetch('/standardize/apply', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(request)
+                    });
+                    if (!response.ok) throw new Error(`Standardization failed: ${response.statusText}`);
+
+                    const data = await response.json();
+                    this.results = data.updated_items;
+
+                    // Re-render everything with the new, standardized results
+                    this.renderResults(null); // Clear old highlights first
+                    const newGlossary = { terms: this.results.flatMap(r => r.glossary) };
+                    this.renderResults(newGlossary);
+                    this.renderConsolidatedGlossary(newGlossary);
+                    
+                    document.getElementById('reportPanel').style.display = 'none';
+
+                } catch (error) {
+                    console.error('Apply error:', error);
+                    alert(`Could not apply standardization: ${error.message}`);
+                    applyBtn.textContent = 'Apply Standardization';
+                    applyBtn.disabled = false;
+                }
+            }
+
             clearResults() {
                 this.results = [];
+                this.inconsistentTerms = {};
+                this.standardizationSelections = {};
+                this.elements.standardizationContainer.style.display = 'none';
+                this.elements.standardizationContainer.innerHTML = '';
                 this.elements.resultsContainer.innerHTML = '<div class="empty-state">Translations will appear here...</div>';
                 this.elements.consolidatedGlossaryContainer.innerHTML = '<div class="empty-state">Glossary will appear here after extraction.</div>';
                 this.elements.resultCount.textContent = '';

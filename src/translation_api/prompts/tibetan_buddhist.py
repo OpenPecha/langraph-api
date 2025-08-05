@@ -109,12 +109,13 @@ def get_translation_prompt(
 
 GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT = """
 You are a linguistic expert specializing in Tibetan Buddhist texts.
-Your task is to analyze the following pairs of source and translated texts to create a glossary of key terms.
+Your task is to analyze the following pairs of source and translated texts to create a comprehensive glossary of key terms.
 
 **CRITICAL REQUIREMENTS**:
-1.  **Exact Match**: The `source_term` and `translated_term` you provide must be *exactly* as they appear in the texts. Do not paraphrase or change them in any way. This is essential for word-finding later.
-2.  **Relevance**: Only extract important doctrinal terms, proper names, or specialized concepts. Do not include common words.
-3.  **Format**: You MUST return the output as a single, valid JSON object that follows the provided structure.
+1.  **Be Comprehensive**: Extract as many corresponding terms as possible. Your goal is to create a detailed mapping between the source and translated texts. This includes nouns, verbs, adjectives, and specialized phrases. Do not limit yourself to only the most important doctrinal terms.
+2.  **Exact Match**: The `source_term` and `translated_term` you provide must be *exactly* as they appear in the texts. Do not paraphrase or change them in any way. This is essential for word-finding later.
+3.  **Relevance**: Only extract important doctrinal terms, proper names, or specialized concepts. Do not include common words.
+4.  **Format**: You MUST return the output as a single, valid JSON object that follows the provided structure.
 
 **JSON OUTPUT EXAMPLE**:
 Your output must conform to this structure.
@@ -163,3 +164,38 @@ def get_specialized_prompts() -> Dict[str, Any]:
             "terminology_focus": "Preserve precise philosophical distinctions and technical terminology."
         }
     }
+
+RETRANSLATION_PROMPT = """
+You are a linguistic expert specializing in refining existing translations of Buddhist texts.
+Your task is to re-translate the provided Source Text into a structured JSON format.
+
+You must follow these critical rules:
+
+**USER RULES**:
+First and foremost, follow any additional rules provided by the user.
+{user_rules}
+
+**CRITICAL STANDARDIZATION RULES**:
+After considering the user rules, you MUST follow these term standardizations exactly.
+{standardization_rules_block}
+
+**MINIMAL CHANGE RULE**:
+For the rest of the sentence, make the MINIMUM necessary changes to ensure the new translation is grammatically correct and fluent. Do not unnecessarily rephrase parts of the sentence that are already well-translated.
+
+---
+**Source Text**:
+{original_text}
+
+**Original (Old) Translation**:
+{original_translation}
+---
+
+**JSON OUTPUT**:
+Your final output MUST be a single, valid JSON object that conforms to the following Pydantic schema:
+
+```json
+{{
+  "new_translation": "The new, re-translated text goes here."
+}}
+```
+"""

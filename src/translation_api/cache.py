@@ -38,6 +38,11 @@ class SimpleCache:
     def set_glossary(self, key: str, glossary_terms: List[GlossaryTerm]):
         self.glossary_cache[key] = glossary_terms
 
+    def clear_all(self):
+        """Clears both the translation and glossary caches."""
+        self.translation_cache.clear()
+        self.glossary_cache.clear()
+
 # Global instance
 cache = SimpleCache()
 

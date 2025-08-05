@@ -62,5 +62,4 @@ class TranslationWorkflowState(TypedDict):
     model_name: str
     model_params: Dict[str, Any]
     custom_steps: Dict[str, Any]
-    metadata: Dict[str, Any]
-    glossary: Optional[Glossary]
+    metadata: Dict[str, Any]    
