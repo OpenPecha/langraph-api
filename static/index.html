@@ -326,7 +326,7 @@
             border-top: 2px solid #ddd;
         }
         
-        .analyze-btn, .apply-btn {
+        .extract-btn, .analyze-btn, .apply-btn {
             background: #6c757d;
             color: white;
             border: none;
@@ -385,6 +385,36 @@
             cursor: pointer;
         }
 
+        .diff-view del {
+            background-color: #ffebe9;
+            color: #d82c0d;
+            text-decoration: line-through;
+        }
+
+        .diff-view ins {
+            background-color: #e6ffed;
+            color: #22863a;
+            text-decoration: none;
+        }
+
+        .confirmation-buttons {
+            margin-top: 20px;
+        }
+        .confirm-btn, .cancel-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .confirm-btn {
+            background-color: #28a745;
+            color: white;
+        }
+        .cancel-btn {
+            background-color: #6c757d;
+            color: white;
+            margin-left: 10px;
+        }
 
     </style>
 </head>
@@ -514,9 +544,10 @@ Form is emptiness, emptiness is form"
                 this.isTranslating = false;
                 this.eventSource = null;
                 this.results = [];
-                this.glossaryTerms = [];
+                this.glossary = null;
                 this.inconsistentTerms = {};
                 this.standardizationSelections = {};
+                this.proposedChanges = {}; // To hold changes before confirmation
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -569,7 +600,7 @@ Form is emptiness, emptiness is form"
 
                 this.isTranslating = true;
                 this.results = [];
-                this.glossaryTerms = [];
+                this.glossary = null; // Clear previous glossary
                 this.updateUI();
                 this.clearResults();
                 this.showProgress();
@@ -627,7 +658,7 @@ Form is emptiness, emptiness is form"
                                 try {
                                     let jsonStr = line.slice(6).trim();
                                     
-                                    // Handle double "data: " prefix issue
+                                    // FIX: Add robustness check for duplicated prefix
                                     if (jsonStr.startsWith('data: ')) {
                                         jsonStr = jsonStr.slice(6).trim();
                                     }
@@ -703,43 +734,16 @@ Form is emptiness, emptiness is form"
                         }
                         break;
                     
-                    case 'glossary_extraction_start':
-                        this.updateProgress(95, data.message || 'Extracting key terms...');
-                        break;
-
-                    case 'glossary_extraction_progress':
-                        const percent = 95 + (data.processed_count / data.total_count) * 5;
-                        this.updateProgress(
-                            percent, 
-                            `Extracting terms: ${data.processed_count}/${data.total_count}`
-                        );
-                        break;
-
-                    case 'glossary_extraction_completed':
-                        this.updateProgress(100, 'Glossary extracted successfully.');
-                        if (data.glossary) {
-                            this.renderResults(data.glossary); // Re-render with the full glossary
-                            this.renderConsolidatedGlossary(data.glossary);
-                        }
-                        break;
-                    
-                    case 'glossary_extraction_error':
-                        this.updateProgress(null, `Glossary extraction failed: ${data.error}`);
-                        break;
-                        
                     case 'completion':
                         console.log('Completion event - all batches done'); // Debug
                         this.updateProgress(100, 'Translation completed!');
                         
-                        // Final update of result count
                         this.elements.resultCount.textContent = `(${this.results.length} translations completed)`;
                         
-                        // Final render with glossary if available
-                        if (data.glossary) {
-                            this.renderResults(data.glossary);
-                            this.renderConsolidatedGlossary(data.glossary);
-                        }
-                        this.renderStandardizationWorkflow(); // Show Analyze button
+                        // Render final results and show the new 'Extract Glossary' button
+                        this.results = data.results;
+                        this.renderResults();
+                        this.renderGlossaryWorkflow(); 
 
                         setTimeout(() => this.onStreamComplete(), 1000);
                         break;
@@ -841,7 +845,7 @@ Form is emptiness, emptiness is form"
                 this.elements.resultCount.textContent = `(${this.results.length} translations)`;
             }
 
-            renderResults(glossary = null) {
+            renderResults(glossary = null, diffMode = false) {
                 console.log('Rendering results with glossary:', glossary);
                 
                 if (!this.results || this.results.length === 0) {
@@ -865,24 +869,38 @@ Form is emptiness, emptiness is form"
                         let originalTextHtml = this.escapeHtml(result.original_text || 'No original text');
                         let translatedTextHtml = this.escapeHtml(result.translated_text || 'No translation');
 
-                        // If a glossary is provided, apply color-coded highlighting
-                        if (glossary && glossary.terms) {
-                            glossary.terms.forEach((term, termIndex) => {
-                                const color = colorPalette[termIndex % colorPalette.length];
-                                const style = `background-color: ${color}; padding: 1px 3px; border-radius: 3px;`;
-                                
-                                // Highlight source term
-                                if (term.source_term) {
-                                    // NOTE: Removing \\b word boundary for scripts like Tibetan that don't use them.
-                                    const sourceRegex = new RegExp(`${this.escapeRegex(term.source_term)}`, 'gi');
-                                    originalTextHtml = originalTextHtml.replace(sourceRegex, match => `<span style="${style}">${match}</span>`);
-                                }
-
-                                // Highlight translated term
-                                if (term.translated_term) {
-                                    const translatedRegex = new RegExp(`\\b${this.escapeRegex(term.translated_term)}\\b`, 'gi');
-                                    translatedTextHtml = translatedTextHtml.replace(translatedRegex, match => `<span style="${style}">${match}</span>`);
-                                }
+                        // Check if there is a proposed change for this item
+                        if (diffMode && this.proposedChanges[index]) {
+                            const original = this.escapeHtml(result.translated_text);
+                            const proposed = this.escapeHtml(this.proposedChanges[index].translated_text);
+                            translatedTextHtml = `<div class="diff-view"><del>${original}</del><ins>${proposed}</ins></div>`;
+                        } else {
+                            // Standard highlighting logic
+                            const fullGlossary = { terms: this.results.flatMap(r => r.glossary || []).concat(Object.values(this.proposedChanges).flatMap(c => c.glossary || [])) };
+                            const uniqueGlossaryTerms = new Map();
+                            if(fullGlossary && fullGlossary.terms) {
+                                fullGlossary.terms.forEach(term => {
+                                    if (!uniqueGlossaryTerms.has(term.source_term)) {
+                                        uniqueGlossaryTerms.set(term.source_term, {
+                                            translated: term.translated_term,
+                                            color: null
+                                        });
+                                    }
+                                });
+                            }
+                            // Assign colors
+                            let colorIndex = 0;
+                            uniqueGlossaryTerms.forEach(value => {
+                                value.color = colorPalette[colorIndex % colorPalette.length];
+                                colorIndex++;
+                            });
+                            // Apply highlights
+                            uniqueGlossaryTerms.forEach((value, sourceTerm) => {
+                                const style = `background-color: ${value.color}; padding: 1px 3px; border-radius: 3px;`;
+                                const sourceRegex = new RegExp(`${this.escapeRegex(sourceTerm)}`, 'gi');
+                                originalTextHtml = originalTextHtml.replace(sourceRegex, match => `<span style="${style}">${match}</span>`);
+                                const translatedRegex = new RegExp(`\\b${this.escapeRegex(value.translated)}\\b`, 'gi');
+                                translatedTextHtml = translatedTextHtml.replace(translatedRegex, match => `<span style="${style}">${match}</span>`);
                             });
                         }
                         
@@ -902,6 +920,109 @@ Form is emptiness, emptiness is form"
                     }).join('');
                 
                 this.elements.resultsContainer.innerHTML = resultsHTML;
+            }
+
+            renderGlossaryWorkflow() {
+                this.elements.standardizationContainer.style.display = 'block';
+                this.elements.standardizationContainer.innerHTML = `
+                    <div class="standardization-container">
+                        <button id="extractBtn" class="extract-btn">Extract Glossary</button>
+                        <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                    </div>
+                `;
+                document.getElementById('extractBtn').addEventListener('click', () => this.handleExtractClick());
+            }
+
+            async handleExtractClick() {
+                const extractBtn = document.getElementById('extractBtn');
+                extractBtn.textContent = 'Extracting...';
+                extractBtn.disabled = true;
+                this.glossary = { terms: [] }; // Initialize to accumulate terms
+
+                const requestData = {
+                    items: this.results,
+                    model_name: this.elements.model.value,
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                try {
+                    const response = await fetch('/glossary/extract/stream', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+
+                    if (!response.ok) throw new Error(`Glossary extraction failed: ${response.statusText}`);
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            // The stream is finished, re-render the standardization workflow
+                            this.renderStandardizationWorkflow(true);
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    let jsonStr = line.slice(6).trim();
+                                    // FIX: Add robustness check for duplicated prefix
+                                    if (jsonStr.startsWith('data: ')) {
+                                        jsonStr = jsonStr.slice(6).trim();
+                                    }
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        this.handleGlossaryStreamEvent(data);
+                                    }
+                                } catch (e) {
+                                    console.log('Skipping invalid glossary JSON:', line, 'Error:', e.message);
+                                }
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+                    
+                    reader.read().then(processStream);
+
+                } catch (error) {
+                    console.error('Glossary extraction error:', error);
+                    alert(`Could not extract glossary: ${error.message}`);
+                    extractBtn.textContent = 'Extract Glossary';
+                    extractBtn.disabled = false;
+                }
+            }
+
+            handleGlossaryStreamEvent(data) {
+                console.log('Glossary stream event:', data);
+                switch (data.type) {
+                    case 'glossary_extraction_start':
+                        this.elements.consolidatedGlossaryContainer.innerHTML = '<div class="empty-state">Starting glossary extraction...</div>';
+                        break;
+                    
+                    case 'glossary_batch_completed':
+                        if (data.terms && data.terms.length > 0) {
+                            this.glossary.terms.push(...data.terms);
+                            // Re-render everything with the new, combined glossary data
+                            this.renderResults(this.glossary);
+                            this.renderConsolidatedGlossary(this.glossary);
+                        }
+                        break;
+
+                    case 'completion':
+                        // Final render just in case, and enable the next step
+                        this.renderResults(data.glossary);
+                        this.renderConsolidatedGlossary(data.glossary);
+                        this.renderStandardizationWorkflow(true);
+                        break;
+                }
             }
 
             renderConsolidatedGlossary(glossary) {
@@ -936,15 +1057,27 @@ Form is emptiness, emptiness is form"
                 container.innerHTML = tableHtml;
             }
 
-            renderStandardizationWorkflow() {
-                this.elements.standardizationContainer.style.display = 'block';
-                this.elements.standardizationContainer.innerHTML = `
-                    <div class="standardization-container">
-                        <button id="analyzeBtn" class="analyze-btn">Analyze Translation Consistency</button>
-                        <div id="reportPanel" class="report-panel" style="display: none;"></div>
-                    </div>
-                `;
-                document.getElementById('analyzeBtn').addEventListener('click', () => this.handleAnalyzeClick());
+            renderStandardizationWorkflow(analysisReady = false) {
+                const container = this.elements.standardizationContainer;
+                container.style.display = 'block';
+                
+                if (analysisReady) {
+                    container.innerHTML = `
+                        <div class="standardization-container">
+                            <button id="analyzeBtn" class="analyze-btn">Analyze Translation Consistency</button>
+                            <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                        </div>
+                    `;
+                    document.getElementById('analyzeBtn').addEventListener('click', () => this.handleAnalyzeClick());
+                } else {
+                     container.innerHTML = `
+                        <div class="standardization-container">
+                            <button id="extractBtn" class="extract-btn">Extract Glossary</button>
+                            <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                        </div>
+                    `;
+                    document.getElementById('extractBtn').addEventListener('click', () => this.handleExtractClick());
+                }
             }
 
             async handleAnalyzeClick() {
@@ -956,7 +1089,7 @@ Form is emptiness, emptiness is form"
                     items: this.results.map(r => ({
                         original_text: r.original_text,
                         translated_text: r.translated_text,
-                        glossary: r.glossary || []
+                        glossary: this.glossary.terms.filter(t => r.original_text.includes(t.source_term)) || []
                     }))
                 };
 
@@ -1029,37 +1162,75 @@ Form is emptiness, emptiness is form"
                 const applyBtn = document.getElementById('applyBtn');
                 applyBtn.textContent = 'Applying...';
                 applyBtn.disabled = true;
+                this.proposedChanges = {}; // Reset proposed changes
 
                 const standardizationPairs = Object.entries(this.standardizationSelections).map(([source, standard]) => ({
                     source_word: source,
                     standardized_translation: standard
                 }));
 
-                const request = {
-                    items: this.results,
+                // Manually construct the items payload to ensure it has the correct structure
+                const itemsForRequest = this.results.map(item => {
+                    const itemGlossary = this.glossary.terms.filter(term => 
+                        item.original_text.includes(term.source_term) || 
+                        item.translated_text.includes(term.translated_term)
+                    );
+                    return {
+                        original_text: item.original_text,
+                        translated_text: item.translated_text,
+                        glossary: itemGlossary
+                    };
+                });
+
+                const requestData = {
+                    items: itemsForRequest,
                     standardization_pairs: standardizationPairs,
                     model_name: this.elements.model.value,
                     user_rules: this.elements.userRules.value.trim() || null
                 };
 
                 try {
-                    const response = await fetch('/standardize/apply', {
+                    const response = await fetch('/standardize/apply/stream', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(request)
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(requestData)
                     });
                     if (!response.ok) throw new Error(`Standardization failed: ${response.statusText}`);
 
-                    const data = await response.json();
-                    this.results = data.updated_items;
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
 
-                    // Re-render everything with the new, standardized results
-                    this.renderResults(null); // Clear old highlights first
-                    const newGlossary = { terms: this.results.flatMap(r => r.glossary) };
-                    this.renderResults(newGlossary);
-                    this.renderConsolidatedGlossary(newGlossary);
-                    
-                    document.getElementById('reportPanel').style.display = 'none';
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            // Stream is finished, render the confirmation buttons
+                            this.renderConfirmationButtons();
+                            return;
+                        }
+
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    let jsonStr = line.slice(6).trim();
+                                    if (jsonStr.startsWith('data: ')) jsonStr = jsonStr.slice(6).trim();
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        this.handleStandardizationStreamEvent(data);
+                                    }
+                                } catch (e) {
+                                    console.error('Standardization stream parse error:', e);
+                                }
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+
+                    reader.read().then(processStream);
 
                 } catch (error) {
                     console.error('Apply error:', error);
@@ -1069,10 +1240,67 @@ Form is emptiness, emptiness is form"
                 }
             }
 
+            handleStandardizationStreamEvent(data) {
+                console.log('Standardization stream event:', data);
+                switch(data.type) {
+                    case 'retranslation_completed':
+                        if (data.updated_item) {
+                            // Store the proposed change instead of applying it directly
+                            this.proposedChanges[data.index] = data.updated_item;
+                            // Render a preview of the changes
+                            this.renderDiffPreview();
+                        }
+                        break;
+                }
+            }
+
+            renderDiffPreview() {
+                // This function re-renders the results, but shows a diff for proposed changes
+                const fullGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(fullGlossary, true); // Pass a flag to indicate diff mode
+            }
+
+            renderConfirmationButtons() {
+                const panel = document.getElementById('reportPanel');
+                const confirmationDiv = document.createElement('div');
+                confirmationDiv.className = 'confirmation-buttons';
+                confirmationDiv.innerHTML = `
+                    <button id="confirmBtn" class="confirm-btn">Confirm Changes</button>
+                    <button id="cancelBtn" class="cancel-btn">Cancel</button>
+                `;
+                panel.appendChild(confirmationDiv);
+
+                document.getElementById('confirmBtn').addEventListener('click', () => this.handleConfirmChanges());
+                document.getElementById('cancelBtn').addEventListener('click', () => this.handleCancelChanges());
+            }
+
+            handleConfirmChanges() {
+                // Apply the proposed changes to the main results array
+                for (const index in this.proposedChanges) {
+                    this.results[index] = this.proposedChanges[index];
+                }
+                
+                // Re-render the final, clean results
+                const finalGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(finalGlossary);
+                this.renderConsolidatedGlossary(finalGlossary);
+                
+                document.getElementById('standardizationContainer').style.display = 'none';
+            }
+
+            handleCancelChanges() {
+                // Just re-render the original results without the diffs
+                const originalGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(originalGlossary);
+                document.getElementById('standardizationContainer').style.display = 'none';
+            }
+
             clearResults() {
                 this.results = [];
+                this.glossary = null;
                 this.inconsistentTerms = {};
                 this.standardizationSelections = {};
+                this.proposedChanges = {};
                 this.elements.standardizationContainer.style.display = 'none';
                 this.elements.standardizationContainer.innerHTML = '';
                 this.elements.resultsContainer.innerHTML = '<div class="empty-state">Translations will appear here...</div>';
