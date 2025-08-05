@@ -3,16 +3,30 @@
 import asyncio
 import json
 import time
-from typing import AsyncGenerator, Dict, Any
+from typing import AsyncGenerator, Dict, Any, List
 from datetime import datetime
 
 from .translation_state import TranslationRequest, TranslationResult
 from ..models.model_router import get_model_router
-from ..prompts.tibetan_buddhist import get_translation_prompt
+from ..models.glossary import Glossary
+from ..prompts.tibetan_buddhist import get_translation_prompt, GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT
 from ..utils.helpers import clean_translation_text, parse_batch_translation_response
-
 from langchain_core.messages import HumanMessage
+from ..cache import get_cache
+from ..models.standardization import StandardizationRequest, RetranslationResponse
+from ..prompts.tibetan_buddhist import RETRANSLATION_PROMPT
 
+async def _extract_glossary_for_pair_async(model: Any, source_text: str, translated_text: str) -> List:
+    """Async helper to extract glossary for a single source/translation pair."""
+    try:
+        structured_model = model.with_structured_output(Glossary)
+        prompt = GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT.format(
+            text_pairs=f"Source: {source_text}\\nTranslated: {translated_text}\\n\\n"
+        )
+        glossary_result = await structured_model.ainvoke(prompt)
+        return glossary_result.terms if glossary_result else []
+    except Exception:
+        return []
 
 class ProgressEvent:
     """Progress event for SSE streaming."""
@@ -44,6 +58,7 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
     """
     start_time = time.time()
     total_texts = len(request.texts)
+    cache = get_cache()
     
     # Emit initialization event
     yield ProgressEvent("initialization", {
@@ -99,131 +114,75 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                 "progress_percent": int((processed_texts / total_texts) * 100)
             }).to_sse_format()
             
-            # Yield control to event loop
             await asyncio.sleep(0)
             
+            batch_results = []
             try:
-                if len(batch["texts"]) == 1:
-                    # Single text translation
-                    prompt = get_translation_prompt(
-                        source_text=batch["texts"][0],
-                        target_language=request.target_language,
-                        text_type=request.text_type,
-                        user_rules=request.user_rules
+                # Use a single prompt for the entire batch
+                model_router = get_model_router()
+                model = model_router.get_model(request.model_name, **request.model_params)
+
+                for i, text_to_translate in enumerate(batch["texts"]):
+                    # 1. Check translation cache
+                    translation_key = cache.get_translation_cache_key(
+                        text_to_translate, request.target_language, request.text_type, request.model_name, request.user_rules
                     )
-                    
-                    # Emit translation start for single text
-                    yield ProgressEvent("translation_start", {
-                        "status": "translating_single_text",
-                        "text_preview": batch["texts"][0][:50] + "..." if len(batch["texts"][0]) > 50 else batch["texts"][0]
-                    }).to_sse_format()
-                    
-                    # Yield control to event loop
-                    await asyncio.sleep(0)
-                    
-                    message = HumanMessage(content=prompt)
-                    response = model.invoke([message])
-                    clean_translation = clean_translation_text(response.content)
-                    
+                    cached_translation = cache.get_translation(translation_key)
+
+                    if cached_translation:
+                        clean_translation = cached_translation
+                    else:
+                        prompt = get_translation_prompt(
+                            source_text=text_to_translate,
+                            target_language=request.target_language,
+                            text_type=request.text_type,
+                            user_rules=request.user_rules
+                        )
+                        message = HumanMessage(content=prompt)
+                        response = await model.ainvoke([message])
+                        clean_translation = clean_translation_text(response.content)
+                        cache.set_translation(translation_key, clean_translation)
+
+                    # 2. Check glossary cache
+                    glossary_key = cache.get_glossary_cache_key(text_to_translate, clean_translation, request.model_name)
+                    cached_glossary = cache.get_glossary(glossary_key)
+                    glossary_terms = []
+
+                    if cached_glossary is not None:
+                        glossary_terms = cached_glossary
+                    else:
+                        try:
+                            glossary_terms = await _extract_glossary_for_pair_async(model, text_to_translate, clean_translation)
+                            cache.set_glossary(glossary_key, glossary_terms)
+                        except Exception:
+                            pass # Fail silently for the streamer
+
                     result = TranslationResult(
-                        original_text=batch["texts"][0],
+                        original_text=text_to_translate,
                         translated_text=clean_translation,
+                        glossary=glossary_terms,
                         metadata={
                             "batch_id": batch["batch_id"],
                             "model_used": request.model_name,
-                            "text_type": request.text_type
+                            "text_type": request.text_type,
+                            "batch_index": i
                         }
                     )
+                    batch_results.append(result)
                     all_results.append(result)
-                    
-                else:
-                    # Batch translation
-                    prompt = get_translation_prompt(
-                        source_text="",
-                        target_language=request.target_language,
-                        text_type=request.text_type,
-                        batch_texts=batch["texts"],
-                        user_rules=request.user_rules
-                    )
-                    
-                    # Emit batch translation start
-                    yield ProgressEvent("translation_start", {
-                        "status": "translating_batch",
-                        "batch_size": len(batch["texts"])
-                    }).to_sse_format()
-                    
-                    # Yield control to event loop
-                    await asyncio.sleep(0)
-                    
-                    message = HumanMessage(content=prompt)
-                    response = model.invoke([message])
-                    translated_texts = parse_batch_translation_response(response.content)
-                    
-                    # Process each translation in the batch
-                    for i, original_text in enumerate(batch["texts"]):
-                        if i < len(translated_texts):
-                            clean_translation = clean_translation_text(translated_texts[i])
-                        else:
-                            clean_translation = "Translation failed"
-                        
-                        result = TranslationResult(
-                            original_text=original_text,
-                            translated_text=clean_translation,
-                            metadata={
-                                "batch_id": batch["batch_id"],
-                                "model_used": request.model_name,
-                                "text_type": request.text_type,
-                                "batch_index": i
-                            }
-                        )
-                        all_results.append(result)
-                        processed_texts += 1
-                        
-                        # Emit individual text completion
-                        yield ProgressEvent("text_completed", {
-                            "status": "text_translated",
-                            "text_number": processed_texts,
-                            "total_texts": total_texts,
-                            "progress_percent": int((processed_texts / total_texts) * 100),
-                            "translation_preview": clean_translation[:100] + "..." if len(clean_translation) > 100 else clean_translation
-                        }).to_sse_format()
-                        
-                        # Yield control to event loop
-                        await asyncio.sleep(0)
-                
-                # Update processed count for single text
-                if len(batch["texts"]) == 1:
                     processed_texts += 1
                 
-                # Emit batch completion with results
-                batch_time = time.time() - batch_start_time
-                
-                # Send batch results immediately
-                batch_results = []
-                if len(batch["texts"]) == 1:
-                    batch_results = [all_results[-1]]  # Last added result
-                else:
-                    # Get the results for this batch
-                    batch_results = all_results[-len(batch["texts"]):]
-                
+                # Emit batch completion with all results for this batch
                 yield ProgressEvent("batch_completed", {
                     "status": "batch_completed",
                     "batch_number": batch_idx + 1,
                     "batch_id": batch["batch_id"],
-                    "processing_time": round(batch_time, 2),
+                    "processing_time": time.time() - batch_start_time,
                     "texts_processed": len(batch["texts"]),
                     "cumulative_progress": int((processed_texts / total_texts) * 100),
-                    "batch_results": [
-                        {
-                            "original_text": result.original_text,
-                            "translated_text": result.translated_text,
-                            "metadata": result.metadata
-                        }
-                        for result in batch_results
-                    ]
+                    "batch_results": [res.dict() for res in batch_results]
                 }).to_sse_format()
                 
-                # Yield control to event loop
                 await asyncio.sleep(0)
                 
             except Exception as e:
@@ -235,7 +194,6 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                     "error": str(e)
                 }).to_sse_format()
                 
-                # Yield control to event loop
                 await asyncio.sleep(0)
                 
                 # Skip failed texts in progress count
@@ -249,14 +207,7 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
             "successful_translations": len(all_results),
             "total_processing_time": round(total_time, 2),
             "average_time_per_text": round(total_time / total_texts, 2) if total_texts > 0 else 0,
-            "results": [
-                {
-                    "original_text": result.original_text,
-                    "translated_text": result.translated_text,
-                    "metadata": result.metadata
-                }
-                for result in all_results
-            ]
+            "results": [res.dict() for res in all_results]
         }).to_sse_format()
         
         # Yield control to event loop
@@ -314,3 +265,119 @@ async def stream_single_translation_progress(
         
         # Yield control to event loop
         await asyncio.sleep(0)
+
+
+async def stream_glossary_progress(request: "GlossaryExtractionRequest") -> AsyncGenerator[str, None]:
+    """Generator for streaming glossary extraction progress."""
+    
+    yield ProgressEvent("glossary_extraction_start", {
+        "status": "starting",
+        "message": f"Starting glossary extraction for {len(request.items)} items..."
+    }).to_sse_format()
+    await asyncio.sleep(0)
+
+    try:
+        model_router = get_model_router()
+        model = model_router.get_model(request.model_name)
+        structured_model = model.with_structured_output(Glossary)
+
+        prompts = [
+            GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT.format(
+                text_pairs=f"Source: {item.original_text}\\nTranslated: {item.translated_text}\\n\\n"
+            ) for item in request.items
+        ]
+
+        all_terms = []
+        for i in range(0, len(prompts), request.batch_size):
+            batch_prompts = prompts[i:i + request.batch_size]
+            
+            glossary_results = await structured_model.abatch(batch_prompts)
+            
+            batch_terms = []
+            for gloss in glossary_results:
+                if gloss and gloss.terms:
+                    batch_terms.extend(gloss.terms)
+                    all_terms.extend(gloss.terms)
+
+            yield ProgressEvent("glossary_batch_completed", {
+                "status": "batch_complete",
+                "terms": [term.dict() for term in batch_terms]
+            }).to_sse_format()
+            await asyncio.sleep(0)
+
+        yield ProgressEvent("completion", {
+            "status": "completed",
+            "glossary": {"terms": [term.dict() for term in all_terms]}
+        }).to_sse_format()
+
+    except Exception as e:
+        yield ProgressEvent("error", {
+            "status": "failed",
+            "error": str(e)
+        }).to_sse_format()
+
+
+async def stream_standardization_progress(request: "StandardizationRequest") -> AsyncGenerator[str, None]:
+    """Generator for streaming standardization progress."""
+    
+    yield ProgressEvent("standardization_start", {
+        "status": "starting",
+        "message": "Starting standardization process..."
+    }).to_sse_format()
+    await asyncio.sleep(0)
+
+    try:
+        model_router = get_model_router()
+        model = model_router.get_model(request.model_name)
+        retranslation_model = model.with_structured_output(RetranslationResponse)
+        glossary_model = model.with_structured_output(Glossary)
+
+        source_words_to_standardize = {pair.source_word for pair in request.standardization_pairs}
+        rules_block = ""
+        for pair in request.standardization_pairs:
+            rules_block += f'- For the source term "{pair.source_word}", use the exact translation "{pair.standardized_translation}".\\n'
+
+        updated_count = 0
+        for i, item in enumerate(request.items):
+            if any(word in item.original_text for word in source_words_to_standardize):
+                yield ProgressEvent("retranslation_start", {
+                    "status": "retranslating_item",
+                    "index": i
+                }).to_sse_format()
+                await asyncio.sleep(0)
+
+                prompt = RETRANSLATION_PROMPT.format(
+                    user_rules=request.user_rules or "No specific user rules provided.",
+                    standardization_rules_block=rules_block,
+                    original_text=item.original_text,
+                    original_translation=item.translated_text
+                )
+                
+                response = await retranslation_model.ainvoke(prompt)
+                new_translation = response.new_translation
+                item.translated_text = new_translation
+
+                glossary_prompt = GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT.format(
+                    text_pairs=f"Source: {item.original_text}\\nTranslated: {new_translation}\\n\\n"
+                )
+                glossary_result = await glossary_model.ainvoke(glossary_prompt)
+                item.glossary = glossary_result.terms if glossary_result else []
+                
+                updated_count += 1
+                yield ProgressEvent("retranslation_completed", {
+                    "status": "item_updated",
+                    "index": i,
+                    "updated_item": item.dict()
+                }).to_sse_format()
+                await asyncio.sleep(0)
+        
+        yield ProgressEvent("completion", {
+            "status": "completed",
+            "message": f"Standardization complete. {updated_count} items updated."
+        }).to_sse_format()
+
+    except Exception as e:
+        yield ProgressEvent("error", {
+            "status": "failed",
+            "error": str(e)
+        }).to_sse_format()

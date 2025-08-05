@@ -150,6 +150,22 @@
             cursor: not-allowed;
         }
 
+        .clear-cache-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+
+        .clear-cache-btn:hover {
+            background: #c82333;
+        }
+
         .progress-container {
             margin: 12px 0;
             display: none;
@@ -262,6 +278,144 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        mark {
+            background-color: rgba(74, 144, 226, 0.2); /* Light blue highlight */
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
+
+        .item-glossary {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px dashed #eee;
+            font-size: 0.85em;
+        }
+
+        .item-glossary strong {
+            font-weight: 500;
+        }
+        
+        .item-glossary ul {
+            list-style-type: disc;
+            margin: 5px 0 0 20px;
+            padding: 0;
+        }
+
+        .glossary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .glossary-table th, .glossary-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .glossary-table th {
+            background: #f8f9fa;
+            font-weight: 500;
+        }
+
+        .standardization-container {
+            padding: 20px;
+            margin-top: 20px;
+            border-top: 2px solid #ddd;
+        }
+        
+        .extract-btn, .analyze-btn, .apply-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .apply-btn {
+            background: #28a745;
+            margin-top: 15px;
+        }
+
+        .analyze-btn:hover, .apply-btn:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .apply-btn:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .apply-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .report-panel {
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+        }
+
+        .inconsistency-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        .inconsistency-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .inconsistency-item strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .inconsistency-item label {
+            display: block;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .diff-view del {
+            background-color: #ffebe9;
+            color: #d82c0d;
+            text-decoration: line-through;
+        }
+
+        .diff-view ins {
+            background-color: #e6ffed;
+            color: #22863a;
+            text-decoration: none;
+        }
+
+        .confirmation-buttons {
+            margin-top: 20px;
+        }
+        .confirm-btn, .cancel-btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .confirm-btn {
+            background-color: #28a745;
+            color: white;
+        }
+        .cancel-btn {
+            background-color: #6c757d;
+            color: white;
+            margin-left: 10px;
+        }
+
     </style>
 </head>
 <body>
@@ -319,7 +473,9 @@
                     </div>
                 </div>
 
-                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px;">
+                <button id="clearCacheBtn" class="clear-cache-btn" style="grid-column: 1 / -1;">Clear Server Cache</button>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px; margin-top: 20px;">
                     <label for="userRules">User Rules (Optional)</label>
                     <textarea 
                         id="userRules" 
@@ -369,6 +525,15 @@ Form is emptiness, emptiness is form"
                         Translations will appear here as they complete in real-time
                     </div>
                 </div>
+
+                <div id="standardizationContainer" style="display: none;"></div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    Consolidated Glossary
+                </div>
+                <div id="consolidatedGlossaryContainer">
+                    <div class="empty-state">Glossary will appear here after extraction.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -379,6 +544,10 @@ Form is emptiness, emptiness is form"
                 this.isTranslating = false;
                 this.eventSource = null;
                 this.results = [];
+                this.glossary = null;
+                this.inconsistentTerms = {};
+                this.standardizationSelections = {};
+                this.proposedChanges = {}; // To hold changes before confirmation
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -393,17 +562,21 @@ Form is emptiness, emptiness is form"
                     batchSize: document.getElementById('batchSize'),
                     userRules: document.getElementById('userRules'),
                     translateBtn: document.getElementById('translateBtn'),
+                    clearCacheBtn: document.getElementById('clearCacheBtn'),
                     progressContainer: document.getElementById('progressContainer'),
                     progressFill: document.getElementById('progressFill'),
                     progressText: document.getElementById('progressText'),
                     statusLog: document.getElementById('statusLog'),
                     resultsContainer: document.getElementById('resultsContainer'),
-                    resultCount: document.getElementById('resultCount')
+                    resultCount: document.getElementById('resultCount'),
+                    consolidatedGlossaryContainer: document.getElementById('consolidatedGlossaryContainer'),
+                    standardizationContainer: document.getElementById('standardizationContainer')
                 };
             }
 
             attachEventListeners() {
                 this.elements.translateBtn.addEventListener('click', () => this.startTranslation());
+                this.elements.clearCacheBtn.addEventListener('click', () => this.handleClearCacheClick());
                 
                 // Auto-resize textarea
                 this.elements.inputText.addEventListener('input', (e) => {
@@ -427,6 +600,7 @@ Form is emptiness, emptiness is form"
 
                 this.isTranslating = true;
                 this.results = [];
+                this.glossary = null; // Clear previous glossary
                 this.updateUI();
                 this.clearResults();
                 this.showProgress();
@@ -484,7 +658,7 @@ Form is emptiness, emptiness is form"
                                 try {
                                     let jsonStr = line.slice(6).trim();
                                     
-                                    // Handle double "data: " prefix issue
+                                    // FIX: Add robustness check for duplicated prefix
                                     if (jsonStr.startsWith('data: ')) {
                                         jsonStr = jsonStr.slice(6).trim();
                                     }
@@ -539,9 +713,11 @@ Form is emptiness, emptiness is form"
                             `Completed ${data.text_number}/${data.total_texts} texts`
                         );
                         
-                        // Add partial result if we have translation preview
-                        if (data.translation_preview) {
-                            this.addPartialResult(data.text_number, data.translation_preview);
+                        // Add result as it completes and re-render
+                        if (data.result) {
+                            // Use text_number as an index to place the result correctly
+                            this.results[data.text_number - 1] = data.result;
+                            this.renderResults();
                         }
                         break;
                         
@@ -553,21 +729,23 @@ Form is emptiness, emptiness is form"
                         
                         // Display batch results immediately
                         if (data.batch_results && data.batch_results.length > 0) {
-                            console.log('Adding batch results:', data.batch_results);
                             this.results.push(...data.batch_results);
-                            this.renderResults();
-                            this.elements.resultCount.textContent = `(${this.results.length} translations)`;
+                            this.renderResults(); // Render translations without glossaries first
                         }
                         break;
-                        
+                    
                     case 'completion':
                         console.log('Completion event - all batches done'); // Debug
                         this.updateProgress(100, 'Translation completed!');
                         
-                        // Final update of result count (results already populated from batches)
                         this.elements.resultCount.textContent = `(${this.results.length} translations completed)`;
                         
-                        setTimeout(() => this.onStreamComplete(), 1000); // Delay completion
+                        // Render final results and show the new 'Extract Glossary' button
+                        this.results = data.results;
+                        this.renderResults();
+                        this.renderGlossaryWorkflow(); 
+
+                        setTimeout(() => this.onStreamComplete(), 1000);
                         break;
                         
                     case 'error':
@@ -601,6 +779,65 @@ Form is emptiness, emptiness is form"
                 // For now, we'll wait for final results
             }
 
+            async handleClearCacheClick() {
+                const btn = this.elements.clearCacheBtn;
+                const originalText = btn.textContent;
+                btn.textContent = 'Clearing...';
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch('/system/clear-cache', { method: 'POST' });
+                    if (!response.ok) throw new Error('Failed to clear cache.');
+                    const data = await response.json();
+                    
+                    btn.textContent = 'Cache Cleared!';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+
+                } catch (error) {
+                    console.error('Clear cache error:', error);
+                    btn.textContent = 'Error!';
+                     setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2000);
+                }
+            }
+
+            renderGlossary(glossary) {
+                const container = this.elements.glossaryContainer;
+
+                if (this.glossaryTerms.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No key terms were extracted.</div>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.className = 'glossary-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Source Term</th>
+                            <th>Translated Term</th>
+                        </tr>
+                    </thead>
+                `;
+                const tbody = document.createElement('tbody');
+                for (const term of this.glossaryTerms) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${this.escapeHtml(term.source_term)}</td>
+                        <td>${this.escapeHtml(term.translated_term)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+                table.appendChild(tbody);
+                container.innerHTML = '';
+                container.appendChild(table);
+            }
+
             displayFinalResults(results) {
                 console.log('Displaying final results:', results); // Debug
                 this.results = results || [];
@@ -608,39 +845,466 @@ Form is emptiness, emptiness is form"
                 this.elements.resultCount.textContent = `(${this.results.length} translations)`;
             }
 
-            renderResults() {
-                console.log('Rendering results:', this.results); // Debug
+            renderResults(glossary = null, diffMode = false) {
+                console.log('Rendering results with glossary:', glossary);
                 
                 if (!this.results || this.results.length === 0) {
                     this.elements.resultsContainer.innerHTML = '<div class="empty-state">No translations yet</div>';
                     return;
                 }
 
+                const colorPalette = [
+                    'rgba(74, 144, 226, 0.2)',  // Light Blue
+                    'rgba(126, 211, 33, 0.2)',   // Light Green
+                    'rgba(252, 228, 102, 0.3)', // Light Yellow
+                    'rgba(250, 128, 114, 0.2)', // Light Salmon
+                    'rgba(186, 104, 200, 0.2)', // Light Purple
+                    'rgba(255, 165, 0, 0.2)',    // Light Orange
+                ];
+
                 const resultsHTML = this.results
                     .map((result, index) => {
-                        console.log('Rendering result:', index, result); // Debug
+                        if (!result) return '';
+
+                        let originalTextHtml = this.escapeHtml(result.original_text || 'No original text');
+                        let translatedTextHtml = this.escapeHtml(result.translated_text || 'No translation');
+
+                        // Check if there is a proposed change for this item
+                        if (diffMode && this.proposedChanges[index]) {
+                            const original = this.escapeHtml(result.translated_text);
+                            const proposed = this.escapeHtml(this.proposedChanges[index].translated_text);
+                            translatedTextHtml = `<div class="diff-view"><del>${original}</del><ins>${proposed}</ins></div>`;
+                        } else {
+                            // Standard highlighting logic
+                            const fullGlossary = { terms: this.results.flatMap(r => r.glossary || []).concat(Object.values(this.proposedChanges).flatMap(c => c.glossary || [])) };
+                            const uniqueGlossaryTerms = new Map();
+                            if(fullGlossary && fullGlossary.terms) {
+                                fullGlossary.terms.forEach(term => {
+                                    if (!uniqueGlossaryTerms.has(term.source_term)) {
+                                        uniqueGlossaryTerms.set(term.source_term, {
+                                            translated: term.translated_term,
+                                            color: null
+                                        });
+                                    }
+                                });
+                            }
+                            // Assign colors
+                            let colorIndex = 0;
+                            uniqueGlossaryTerms.forEach(value => {
+                                value.color = colorPalette[colorIndex % colorPalette.length];
+                                colorIndex++;
+                            });
+                            // Apply highlights
+                            uniqueGlossaryTerms.forEach((value, sourceTerm) => {
+                                const style = `background-color: ${value.color}; padding: 1px 3px; border-radius: 3px;`;
+                                const sourceRegex = new RegExp(`${this.escapeRegex(sourceTerm)}`, 'gi');
+                                originalTextHtml = originalTextHtml.replace(sourceRegex, match => `<span style="${style}">${match}</span>`);
+                                const translatedRegex = new RegExp(`\\b${this.escapeRegex(value.translated)}\\b`, 'gi');
+                                translatedTextHtml = translatedTextHtml.replace(translatedRegex, match => `<span style="${style}">${match}</span>`);
+                            });
+                        }
+                        
                         return `
                             <div class="translation-result">
                                 <div class="original-text">
-                                    ${index + 1}. ${this.escapeHtml(result.original_text || 'No original text')}
+                                    ${index + 1}. ${originalTextHtml}
                                 </div>
                                 <div class="translated-text">
-                                    ${this.escapeHtml(result.translated_text || 'No translation')}
+                                    ${translatedTextHtml}
                                 </div>
                                 <div class="text-meta">
-                                    Model: ${result.metadata?.model_used || 'Unknown'} • Type: ${result.metadata?.text_type || 'Unknown'}
+                                    Model: ${this.escapeHtml(result.metadata?.model_used || 'Unknown')} • Type: ${this.escapeHtml(result.metadata?.text_type || 'Unknown')}
                                 </div>
                             </div>
                         `;
                     }).join('');
                 
-                console.log('Setting results HTML:', resultsHTML); // Debug
                 this.elements.resultsContainer.innerHTML = resultsHTML;
+            }
+
+            renderGlossaryWorkflow() {
+                this.elements.standardizationContainer.style.display = 'block';
+                this.elements.standardizationContainer.innerHTML = `
+                    <div class="standardization-container">
+                        <button id="extractBtn" class="extract-btn">Extract Glossary</button>
+                        <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                    </div>
+                `;
+                document.getElementById('extractBtn').addEventListener('click', () => this.handleExtractClick());
+            }
+
+            async handleExtractClick() {
+                const extractBtn = document.getElementById('extractBtn');
+                extractBtn.textContent = 'Extracting...';
+                extractBtn.disabled = true;
+                this.glossary = { terms: [] }; // Initialize to accumulate terms
+
+                const requestData = {
+                    items: this.results,
+                    model_name: this.elements.model.value,
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                try {
+                    const response = await fetch('/glossary/extract/stream', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+
+                    if (!response.ok) throw new Error(`Glossary extraction failed: ${response.statusText}`);
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            // The stream is finished, re-render the standardization workflow
+                            this.renderStandardizationWorkflow(true);
+                            return;
+                        }
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    let jsonStr = line.slice(6).trim();
+                                    // FIX: Add robustness check for duplicated prefix
+                                    if (jsonStr.startsWith('data: ')) {
+                                        jsonStr = jsonStr.slice(6).trim();
+                                    }
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        this.handleGlossaryStreamEvent(data);
+                                    }
+                                } catch (e) {
+                                    console.log('Skipping invalid glossary JSON:', line, 'Error:', e.message);
+                                }
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+                    
+                    reader.read().then(processStream);
+
+                } catch (error) {
+                    console.error('Glossary extraction error:', error);
+                    alert(`Could not extract glossary: ${error.message}`);
+                    extractBtn.textContent = 'Extract Glossary';
+                    extractBtn.disabled = false;
+                }
+            }
+
+            handleGlossaryStreamEvent(data) {
+                console.log('Glossary stream event:', data);
+                switch (data.type) {
+                    case 'glossary_extraction_start':
+                        this.elements.consolidatedGlossaryContainer.innerHTML = '<div class="empty-state">Starting glossary extraction...</div>';
+                        break;
+                    
+                    case 'glossary_batch_completed':
+                        if (data.terms && data.terms.length > 0) {
+                            this.glossary.terms.push(...data.terms);
+                            // Re-render everything with the new, combined glossary data
+                            this.renderResults(this.glossary);
+                            this.renderConsolidatedGlossary(this.glossary);
+                        }
+                        break;
+
+                    case 'completion':
+                        // Final render just in case, and enable the next step
+                        this.renderResults(data.glossary);
+                        this.renderConsolidatedGlossary(data.glossary);
+                        this.renderStandardizationWorkflow(true);
+                        break;
+                }
+            }
+
+            renderConsolidatedGlossary(glossary) {
+                const container = this.elements.consolidatedGlossaryContainer;
+                if (!glossary || !glossary.terms || glossary.terms.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No key terms were extracted.</div>';
+                    return;
+                }
+
+                const uniqueTerms = new Map();
+                glossary.terms.forEach(term => {
+                    uniqueTerms.set(term.source_term, term.translated_term);
+                });
+
+                let tableHtml = `<table class="glossary-table">
+                    <thead>
+                        <tr>
+                            <th>Source Term</th>
+                            <th>Translated Term</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                for (const [source, translated] of uniqueTerms.entries()) {
+                    tableHtml += `<tr>
+                                    <td>${this.escapeHtml(source)}</td>
+                                    <td>${this.escapeHtml(translated)}</td>
+                                 </tr>`;
+                }
+
+                tableHtml += `</tbody></table>`;
+                container.innerHTML = tableHtml;
+            }
+
+            renderStandardizationWorkflow(analysisReady = false) {
+                const container = this.elements.standardizationContainer;
+                container.style.display = 'block';
+                
+                if (analysisReady) {
+                    container.innerHTML = `
+                        <div class="standardization-container">
+                            <button id="analyzeBtn" class="analyze-btn">Analyze Translation Consistency</button>
+                            <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                        </div>
+                    `;
+                    document.getElementById('analyzeBtn').addEventListener('click', () => this.handleAnalyzeClick());
+                } else {
+                     container.innerHTML = `
+                        <div class="standardization-container">
+                            <button id="extractBtn" class="extract-btn">Extract Glossary</button>
+                            <div id="reportPanel" class="report-panel" style="display: none;"></div>
+                        </div>
+                    `;
+                    document.getElementById('extractBtn').addEventListener('click', () => this.handleExtractClick());
+                }
+            }
+
+            async handleAnalyzeClick() {
+                const analyzeBtn = document.getElementById('analyzeBtn');
+                analyzeBtn.textContent = 'Analyzing...';
+                analyzeBtn.disabled = true;
+
+                const analysisRequest = {
+                    items: this.results.map(r => ({
+                        original_text: r.original_text,
+                        translated_text: r.translated_text,
+                        glossary: this.glossary.terms.filter(t => r.original_text.includes(t.source_term)) || []
+                    }))
+                };
+
+                try {
+                    const response = await fetch('/standardize/analyze', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(analysisRequest)
+                    });
+                    if (!response.ok) throw new Error(`Analysis failed: ${response.statusText}`);
+                    
+                    const data = await response.json();
+                    this.inconsistentTerms = data.inconsistent_terms;
+                    this.renderInconsistencyReport();
+
+                } catch (error) {
+                    console.error('Analysis error:', error);
+                    alert(`Could not analyze inconsistencies: ${error.message}`);
+                } finally {
+                    analyzeBtn.style.display = 'none'; // Hide after analysis
+                }
+            }
+
+            renderInconsistencyReport() {
+                const panel = document.getElementById('reportPanel');
+                if (Object.keys(this.inconsistentTerms).length === 0) {
+                    panel.innerHTML = '<p>No inconsistencies found. All terms are standardized.</p>';
+                    panel.style.display = 'block';
+                    return;
+                }
+
+                let reportHtml = '';
+                for (const sourceTerm in this.inconsistentTerms) {
+                    const translations = this.inconsistentTerms[sourceTerm];
+                    reportHtml += `<div class="inconsistency-item" data-source-term="${sourceTerm}">
+                        <strong>Source Term: "${this.escapeHtml(sourceTerm)}"</strong>`;
+                    translations.forEach((translation, index) => {
+                        reportHtml += `
+                            <label>
+                                <input type="radio" name="standard_for_${sourceTerm}" value="${this.escapeHtml(translation)}">
+                                ${this.escapeHtml(translation)}
+                            </label>
+                        `;
+                    });
+                    reportHtml += `</div>`;
+                }
+
+                panel.innerHTML = reportHtml + `<button id="applyBtn" class="apply-btn" disabled>Apply Standardization</button>`;
+                panel.style.display = 'block';
+                
+                panel.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.addEventListener('change', () => this.handleStandardizationSelectionChange());
+                });
+                document.getElementById('applyBtn').addEventListener('click', () => this.handleApplyClick());
+            }
+
+            handleStandardizationSelectionChange() {
+                this.standardizationSelections = {};
+                document.querySelectorAll('.inconsistency-item').forEach(item => {
+                    const sourceTerm = item.dataset.sourceTerm;
+                    const selectedRadio = item.querySelector(`input[name="standard_for_${sourceTerm}"]:checked`);
+                    if (selectedRadio) {
+                        this.standardizationSelections[sourceTerm] = selectedRadio.value;
+                    }
+                });
+                document.getElementById('applyBtn').disabled = Object.keys(this.standardizationSelections).length === 0;
+            }
+
+            async handleApplyClick() {
+                const applyBtn = document.getElementById('applyBtn');
+                applyBtn.textContent = 'Applying...';
+                applyBtn.disabled = true;
+                this.proposedChanges = {}; // Reset proposed changes
+
+                const standardizationPairs = Object.entries(this.standardizationSelections).map(([source, standard]) => ({
+                    source_word: source,
+                    standardized_translation: standard
+                }));
+
+                // Manually construct the items payload to ensure it has the correct structure
+                const itemsForRequest = this.results.map(item => {
+                    const itemGlossary = this.glossary.terms.filter(term => 
+                        item.original_text.includes(term.source_term) || 
+                        item.translated_text.includes(term.translated_term)
+                    );
+                    return {
+                        original_text: item.original_text,
+                        translated_text: item.translated_text,
+                        glossary: itemGlossary
+                    };
+                });
+
+                const requestData = {
+                    items: itemsForRequest,
+                    standardization_pairs: standardizationPairs,
+                    model_name: this.elements.model.value,
+                    user_rules: this.elements.userRules.value.trim() || null
+                };
+
+                try {
+                    const response = await fetch('/standardize/apply/stream', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+                    if (!response.ok) throw new Error(`Standardization failed: ${response.statusText}`);
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            // Stream is finished, render the confirmation buttons
+                            this.renderConfirmationButtons();
+                            return;
+                        }
+
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    let jsonStr = line.slice(6).trim();
+                                    if (jsonStr.startsWith('data: ')) jsonStr = jsonStr.slice(6).trim();
+                                    if (jsonStr) {
+                                        const data = JSON.parse(jsonStr);
+                                        this.handleStandardizationStreamEvent(data);
+                                    }
+                                } catch (e) {
+                                    console.error('Standardization stream parse error:', e);
+                                }
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+
+                    reader.read().then(processStream);
+
+                } catch (error) {
+                    console.error('Apply error:', error);
+                    alert(`Could not apply standardization: ${error.message}`);
+                    applyBtn.textContent = 'Apply Standardization';
+                    applyBtn.disabled = false;
+                }
+            }
+
+            handleStandardizationStreamEvent(data) {
+                console.log('Standardization stream event:', data);
+                switch(data.type) {
+                    case 'retranslation_completed':
+                        if (data.updated_item) {
+                            // Store the proposed change instead of applying it directly
+                            this.proposedChanges[data.index] = data.updated_item;
+                            // Render a preview of the changes
+                            this.renderDiffPreview();
+                        }
+                        break;
+                }
+            }
+
+            renderDiffPreview() {
+                // This function re-renders the results, but shows a diff for proposed changes
+                const fullGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(fullGlossary, true); // Pass a flag to indicate diff mode
+            }
+
+            renderConfirmationButtons() {
+                const panel = document.getElementById('reportPanel');
+                const confirmationDiv = document.createElement('div');
+                confirmationDiv.className = 'confirmation-buttons';
+                confirmationDiv.innerHTML = `
+                    <button id="confirmBtn" class="confirm-btn">Confirm Changes</button>
+                    <button id="cancelBtn" class="cancel-btn">Cancel</button>
+                `;
+                panel.appendChild(confirmationDiv);
+
+                document.getElementById('confirmBtn').addEventListener('click', () => this.handleConfirmChanges());
+                document.getElementById('cancelBtn').addEventListener('click', () => this.handleCancelChanges());
+            }
+
+            handleConfirmChanges() {
+                // Apply the proposed changes to the main results array
+                for (const index in this.proposedChanges) {
+                    this.results[index] = this.proposedChanges[index];
+                }
+                
+                // Re-render the final, clean results
+                const finalGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(finalGlossary);
+                this.renderConsolidatedGlossary(finalGlossary);
+                
+                document.getElementById('standardizationContainer').style.display = 'none';
+            }
+
+            handleCancelChanges() {
+                // Just re-render the original results without the diffs
+                const originalGlossary = { terms: this.results.flatMap(r => r.glossary || []) };
+                this.renderResults(originalGlossary);
+                document.getElementById('standardizationContainer').style.display = 'none';
             }
 
             clearResults() {
                 this.results = [];
+                this.glossary = null;
+                this.inconsistentTerms = {};
+                this.standardizationSelections = {};
+                this.proposedChanges = {};
+                this.elements.standardizationContainer.style.display = 'none';
+                this.elements.standardizationContainer.innerHTML = '';
                 this.elements.resultsContainer.innerHTML = '<div class="empty-state">Translations will appear here...</div>';
+                this.elements.consolidatedGlossaryContainer.innerHTML = '<div class="empty-state">Glossary will appear here after extraction.</div>';
                 this.elements.resultCount.textContent = '';
                 this.elements.statusLog.innerHTML = '';
             }
@@ -684,7 +1348,12 @@ Form is emptiness, emptiness is form"
                 this.onStreamComplete();
             }
 
+            escapeRegex(string) {
+                return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+            }
+
             escapeHtml(text) {
+                if (typeof text !== 'string') return '';
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
