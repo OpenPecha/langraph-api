@@ -3,6 +3,8 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
+from ..models.glossary import Glossary
+from ..models.glossary import GlossaryTerm
 
 
 class TranslationRequest(BaseModel):
@@ -28,11 +30,10 @@ class TranslationBatch(BaseModel):
 
 
 class TranslationResult(BaseModel):
-    """Result of a single translation."""
-    original_text: str = Field(..., description="Original text")
-    translated_text: str = Field(..., description="Translated text")
-    confidence_score: Optional[float] = Field(None, description="Translation confidence (if available)")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    """Result for a single text translation."""
+    original_text: str
+    translated_text: str
+    metadata: Dict[str, Any]
 
 
 class BatchResult(BaseModel):
@@ -46,33 +47,20 @@ class BatchResult(BaseModel):
 
 
 class TranslationWorkflowState(TypedDict):
-    """State structure for LangGraph translation workflow."""
-    
-    # Input data
+    """Represents the state of the translation workflow."""
     original_request: TranslationRequest
-    
-    # Processing state
     batches: List[TranslationBatch]
     current_batch_index: int
-    
-    # Results
     batch_results: List[BatchResult]
     final_results: List[TranslationResult]
-    
-    # Workflow metadata
     total_texts: int
     processed_texts: int
     workflow_start_time: float
-    workflow_status: str  # "running", "completed", "failed"
-    
-    # Error handling
+    workflow_status: str
     errors: List[Dict[str, Any]]
     retry_count: int
-    
-    # Model and configuration
     model_name: str
     model_params: Dict[str, Any]
-    
-    # Future extensibility
-    custom_steps: Dict[str, Any]  # For future workflow extensions
-    metadata: Dict[str, Any]      # Additional workflow metadata
+    custom_steps: Dict[str, Any]
+    metadata: Dict[str, Any]
+    glossary: Optional[Glossary]

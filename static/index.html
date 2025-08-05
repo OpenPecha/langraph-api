@@ -262,6 +262,48 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        mark {
+            background-color: rgba(74, 144, 226, 0.2); /* Light blue highlight */
+            padding: 1px 3px;
+            border-radius: 3px;
+        }
+
+        .item-glossary {
+            margin-top: 12px;
+            padding-top: 8px;
+            border-top: 1px dashed #eee;
+            font-size: 0.85em;
+        }
+
+        .item-glossary strong {
+            font-weight: 500;
+        }
+        
+        .item-glossary ul {
+            list-style-type: disc;
+            margin: 5px 0 0 20px;
+            padding: 0;
+        }
+
+        .glossary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .glossary-table th, .glossary-table td {
+            text-align: left;
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .glossary-table th {
+            background: #f8f9fa;
+            font-weight: 500;
+        }
+
     </style>
 </head>
 <body>
@@ -369,6 +411,13 @@ Form is emptiness, emptiness is form"
                         Translations will appear here as they complete in real-time
                     </div>
                 </div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    Consolidated Glossary
+                </div>
+                <div id="consolidatedGlossaryContainer">
+                    <div class="empty-state">Glossary will appear here after extraction.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -379,6 +428,7 @@ Form is emptiness, emptiness is form"
                 this.isTranslating = false;
                 this.eventSource = null;
                 this.results = [];
+                this.glossaryTerms = [];
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -398,7 +448,8 @@ Form is emptiness, emptiness is form"
                     progressText: document.getElementById('progressText'),
                     statusLog: document.getElementById('statusLog'),
                     resultsContainer: document.getElementById('resultsContainer'),
-                    resultCount: document.getElementById('resultCount')
+                    resultCount: document.getElementById('resultCount'),
+                    consolidatedGlossaryContainer: document.getElementById('consolidatedGlossaryContainer')
                 };
             }
 
@@ -427,6 +478,7 @@ Form is emptiness, emptiness is form"
 
                 this.isTranslating = true;
                 this.results = [];
+                this.glossaryTerms = [];
                 this.updateUI();
                 this.clearResults();
                 this.showProgress();
@@ -539,9 +591,11 @@ Form is emptiness, emptiness is form"
                             `Completed ${data.text_number}/${data.total_texts} texts`
                         );
                         
-                        // Add partial result if we have translation preview
-                        if (data.translation_preview) {
-                            this.addPartialResult(data.text_number, data.translation_preview);
+                        // Add result as it completes and re-render
+                        if (data.result) {
+                            // Use text_number as an index to place the result correctly
+                            this.results[data.text_number - 1] = data.result;
+                            this.renderResults();
                         }
                         break;
                         
@@ -553,21 +607,49 @@ Form is emptiness, emptiness is form"
                         
                         // Display batch results immediately
                         if (data.batch_results && data.batch_results.length > 0) {
-                            console.log('Adding batch results:', data.batch_results);
                             this.results.push(...data.batch_results);
-                            this.renderResults();
-                            this.elements.resultCount.textContent = `(${this.results.length} translations)`;
+                            this.renderResults(); // Render translations without glossaries first
                         }
+                        break;
+                    
+                    case 'glossary_extraction_start':
+                        this.updateProgress(95, data.message || 'Extracting key terms...');
+                        break;
+
+                    case 'glossary_extraction_progress':
+                        const percent = 95 + (data.processed_count / data.total_count) * 5;
+                        this.updateProgress(
+                            percent, 
+                            `Extracting terms: ${data.processed_count}/${data.total_count}`
+                        );
+                        break;
+
+                    case 'glossary_extraction_completed':
+                        this.updateProgress(100, 'Glossary extracted successfully.');
+                        if (data.glossary) {
+                            this.renderResults(data.glossary); // Re-render with the full glossary
+                            this.renderConsolidatedGlossary(data.glossary);
+                        }
+                        break;
+                    
+                    case 'glossary_extraction_error':
+                        this.updateProgress(null, `Glossary extraction failed: ${data.error}`);
                         break;
                         
                     case 'completion':
                         console.log('Completion event - all batches done'); // Debug
                         this.updateProgress(100, 'Translation completed!');
                         
-                        // Final update of result count (results already populated from batches)
+                        // Final update of result count
                         this.elements.resultCount.textContent = `(${this.results.length} translations completed)`;
                         
-                        setTimeout(() => this.onStreamComplete(), 1000); // Delay completion
+                        // Final render with glossary if available
+                        if (data.glossary) {
+                            this.renderResults(data.glossary);
+                            this.renderConsolidatedGlossary(data.glossary);
+                        }
+
+                        setTimeout(() => this.onStreamComplete(), 1000);
                         break;
                         
                     case 'error':
@@ -601,6 +683,38 @@ Form is emptiness, emptiness is form"
                 // For now, we'll wait for final results
             }
 
+            renderGlossary() {
+                const container = this.elements.glossaryContainer;
+
+                if (this.glossaryTerms.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No key terms were extracted.</div>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.className = 'glossary-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Source Term</th>
+                            <th>Translated Term</th>
+                        </tr>
+                    </thead>
+                `;
+                const tbody = document.createElement('tbody');
+                for (const term of this.glossaryTerms) {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${this.escapeHtml(term.source_term)}</td>
+                        <td>${this.escapeHtml(term.translated_term)}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+                table.appendChild(tbody);
+                container.innerHTML = '';
+                container.appendChild(table);
+            }
+
             displayFinalResults(results) {
                 console.log('Displaying final results:', results); // Debug
                 this.results = results || [];
@@ -608,39 +722,105 @@ Form is emptiness, emptiness is form"
                 this.elements.resultCount.textContent = `(${this.results.length} translations)`;
             }
 
-            renderResults() {
-                console.log('Rendering results:', this.results); // Debug
+            renderResults(glossary = null) {
+                console.log('Rendering results with glossary:', glossary);
                 
                 if (!this.results || this.results.length === 0) {
                     this.elements.resultsContainer.innerHTML = '<div class="empty-state">No translations yet</div>';
                     return;
                 }
 
+                const colorPalette = [
+                    'rgba(74, 144, 226, 0.2)',  // Light Blue
+                    'rgba(126, 211, 33, 0.2)',   // Light Green
+                    'rgba(252, 228, 102, 0.3)', // Light Yellow
+                    'rgba(250, 128, 114, 0.2)', // Light Salmon
+                    'rgba(186, 104, 200, 0.2)', // Light Purple
+                    'rgba(255, 165, 0, 0.2)',    // Light Orange
+                ];
+
                 const resultsHTML = this.results
                     .map((result, index) => {
-                        console.log('Rendering result:', index, result); // Debug
+                        if (!result) return '';
+
+                        let originalTextHtml = this.escapeHtml(result.original_text || 'No original text');
+                        let translatedTextHtml = this.escapeHtml(result.translated_text || 'No translation');
+
+                        // If a glossary is provided, apply color-coded highlighting
+                        if (glossary && glossary.terms) {
+                            glossary.terms.forEach((term, termIndex) => {
+                                const color = colorPalette[termIndex % colorPalette.length];
+                                const style = `background-color: ${color}; padding: 1px 3px; border-radius: 3px;`;
+                                
+                                // Highlight source term
+                                if (term.source_term) {
+                                    // NOTE: Removing \\b word boundary for scripts like Tibetan that don't use them.
+                                    const sourceRegex = new RegExp(`${this.escapeRegex(term.source_term)}`, 'gi');
+                                    originalTextHtml = originalTextHtml.replace(sourceRegex, match => `<span style="${style}">${match}</span>`);
+                                }
+
+                                // Highlight translated term
+                                if (term.translated_term) {
+                                    const translatedRegex = new RegExp(`\\b${this.escapeRegex(term.translated_term)}\\b`, 'gi');
+                                    translatedTextHtml = translatedTextHtml.replace(translatedRegex, match => `<span style="${style}">${match}</span>`);
+                                }
+                            });
+                        }
+                        
                         return `
                             <div class="translation-result">
                                 <div class="original-text">
-                                    ${index + 1}. ${this.escapeHtml(result.original_text || 'No original text')}
+                                    ${index + 1}. ${originalTextHtml}
                                 </div>
                                 <div class="translated-text">
-                                    ${this.escapeHtml(result.translated_text || 'No translation')}
+                                    ${translatedTextHtml}
                                 </div>
                                 <div class="text-meta">
-                                    Model: ${result.metadata?.model_used || 'Unknown'} • Type: ${result.metadata?.text_type || 'Unknown'}
+                                    Model: ${this.escapeHtml(result.metadata?.model_used || 'Unknown')} • Type: ${this.escapeHtml(result.metadata?.text_type || 'Unknown')}
                                 </div>
                             </div>
                         `;
                     }).join('');
                 
-                console.log('Setting results HTML:', resultsHTML); // Debug
                 this.elements.resultsContainer.innerHTML = resultsHTML;
+            }
+
+            renderConsolidatedGlossary(glossary) {
+                const container = this.elements.consolidatedGlossaryContainer;
+                if (!glossary || !glossary.terms || glossary.terms.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No key terms were extracted.</div>';
+                    return;
+                }
+
+                const uniqueTerms = new Map();
+                glossary.terms.forEach(term => {
+                    uniqueTerms.set(term.source_term, term.translated_term);
+                });
+
+                let tableHtml = `<table class="glossary-table">
+                    <thead>
+                        <tr>
+                            <th>Source Term</th>
+                            <th>Translated Term</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                for (const [source, translated] of uniqueTerms.entries()) {
+                    tableHtml += `<tr>
+                                    <td>${this.escapeHtml(source)}</td>
+                                    <td>${this.escapeHtml(translated)}</td>
+                                 </tr>`;
+                }
+
+                tableHtml += `</tbody></table>`;
+                container.innerHTML = tableHtml;
             }
 
             clearResults() {
                 this.results = [];
                 this.elements.resultsContainer.innerHTML = '<div class="empty-state">Translations will appear here...</div>';
+                this.elements.consolidatedGlossaryContainer.innerHTML = '<div class="empty-state">Glossary will appear here after extraction.</div>';
                 this.elements.resultCount.textContent = '';
                 this.elements.statusLog.innerHTML = '';
             }
@@ -684,7 +864,12 @@ Form is emptiness, emptiness is form"
                 this.onStreamComplete();
             }
 
+            escapeRegex(string) {
+                return string.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+            }
+
             escapeHtml(text) {
+                if (typeof text !== 'string') return '';
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;

@@ -107,6 +107,42 @@ def get_translation_prompt(
     )
 
 
+GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT = """
+You are a linguistic expert specializing in Tibetan Buddhist texts.
+Your task is to analyze the following pairs of source and translated texts to create a glossary of key terms.
+
+**CRITICAL REQUIREMENTS**:
+1.  **Exact Match**: The `source_term` and `translated_term` you provide must be *exactly* as they appear in the texts. Do not paraphrase or change them in any way. This is essential for word-finding later.
+2.  **Relevance**: Only extract important doctrinal terms, proper names, or specialized concepts. Do not include common words.
+3.  **Format**: You MUST return the output as a single, valid JSON object that follows the provided structure.
+
+**JSON OUTPUT EXAMPLE**:
+Your output must conform to this structure.
+
+```json
+{{
+  "terms": [
+    {{
+      "source_term": "bodhicitta",
+      "translated_term": "the mind of enlightenment"
+    }},
+    {{
+      "source_term": "Tathāgata",
+      "translated_term": "the Thus-Gone One"
+    }},
+    {{
+      "source_term": "śūnyatā",
+      "translated_term": "emptiness"
+    }}
+  ]
+}}
+```
+
+**TEXT PAIRS FOR ANALYSIS**:
+{text_pairs}
+"""
+
+
 def get_specialized_prompts() -> Dict[str, Any]:
     """Get specialized prompts for different types of Buddhist texts."""
     return {

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from .workflows.translation_state import TranslationRequest, TranslationResult
+from .models.glossary import Glossary, GlossaryTerm
 from .workflows.streaming import stream_translation_progress, stream_single_translation_progress
 from .models.model_router import get_model_router
 from .config import get_settings
@@ -41,6 +42,7 @@ class TranslationAPIResponse(BaseModel):
     results: List[TranslationResult] = Field(..., description="Translation results")
     metadata: Dict[str, Any] = Field(..., description="Processing metadata")
     errors: List[Dict[str, Any]] = Field(default_factory=list, description="Any errors that occurred")
+    glossary: Optional[Glossary] = Field(None, description="A consolidated glossary of key terms extracted from all the translated texts.")
 
 
 class HealthResponse(BaseModel):
@@ -105,7 +107,47 @@ async def health_check():
 
 
 
-@app.post("/translate", response_model=TranslationAPIResponse, tags=["Translation"])
+@app.post(
+    "/translate", 
+    response_model=TranslationAPIResponse, 
+    tags=["Translation"],
+    responses={
+        200: {
+            "description": "Successful translation.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "results": [
+                            {
+                                "original_text": "OM MANI PADME HUM",
+                                "translated_text": "Om Mani Padme Hum (Hail the jewel in the lotus)",
+                                "metadata": {"batch_id": "...", "model_used": "claude", "text_type": "mantra"}
+                            }
+                        ],
+                        "metadata": {
+                            "initialized_at": "2023-10-27T10:00:00Z",
+                            "completed_at": "2023-10-27T10:00:05Z",
+                            "total_processing_time": 5.0,
+                            "successful_batches": 1,
+                            "failed_batches": 0,
+                            "total_translations": 1
+                        },
+                        "errors": [],
+                        "glossary": {
+                            "terms": [
+                                {"source_term": "MANI", "translated_term": "Jewel"},
+                                {"source_term": "PADME", "translated_term": "Lotus"}
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        400: {"description": "Bad Request, e.g., invalid model name."},
+        500: {"description": "Internal Server Error."}
+    }
+)
 async def translate_texts(request: TranslationAPIRequest):
     """
     Translate multiple Buddhist texts with batch processing.
@@ -115,6 +157,7 @@ async def translate_texts(request: TranslationAPIRequest):
     - Custom user rules for translation preferences
     - Domain-aware prompting for Buddhist texts
     - Efficient batch processing
+    The response includes the full list of translations and a consolidated glossary of all unique terms found. Results are cached to accelerate repeated requests.
     """
     try:
         # Validate model availability
@@ -152,7 +195,8 @@ async def translate_texts(request: TranslationAPIRequest):
             success=final_state["workflow_status"] == "completed",
             results=final_state["final_results"],
             metadata=final_state["metadata"],
-            errors=final_state["errors"]
+            errors=final_state["errors"],
+            glossary=final_state.get("glossary")
         )
         
     except HTTPException:
@@ -198,7 +242,23 @@ async def translate_single_text(request: SingleTranslationRequest):
 
 
 
-@app.post("/translate/stream", tags=["Streaming"])
+@app.post(
+    "/translate/stream", 
+    tags=["Streaming"],
+    responses={
+        200: {
+            "description": "A stream of Server-Sent Events (SSE).",
+            "content": {
+                "text/event-stream": {
+                    "schema": {
+                        "type": "string",
+                        "example": 'data: {"timestamp":"...","type":"completion","status":"completed",...}\n\n'
+                    }
+                }
+            }
+        }
+    }
+)
 async def stream_translate_texts(request: TranslationAPIRequest):
     """
     Stream translation progress with real-time updates (RECOMMENDED).
@@ -210,6 +270,7 @@ async def stream_translate_texts(request: TranslationAPIRequest):
     - Error handling and recovery
     
     Perfect for building responsive UIs with live translation updates.
+    This is ideal for building responsive user interfaces.
     """
     try:
         # Validate model availability
