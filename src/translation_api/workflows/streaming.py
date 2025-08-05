@@ -309,12 +309,14 @@ async def stream_glossary_progress(request: "GlossaryExtractionRequest") -> Asyn
             "status": "completed",
             "glossary": {"terms": [term.dict() for term in all_terms]}
         }).to_sse_format()
+        await asyncio.sleep(0)
 
     except Exception as e:
         yield ProgressEvent("error", {
             "status": "failed",
             "error": str(e)
         }).to_sse_format()
+        await asyncio.sleep(0)
 
 
 async def stream_standardization_progress(request: "StandardizationRequest") -> AsyncGenerator[str, None]:
@@ -375,9 +377,11 @@ async def stream_standardization_progress(request: "StandardizationRequest") -> 
             "status": "completed",
             "message": f"Standardization complete. {updated_count} items updated."
         }).to_sse_format()
+        await asyncio.sleep(0)
 
     except Exception as e:
         yield ProgressEvent("error", {
             "status": "failed",
             "error": str(e)
         }).to_sse_format()
+        await asyncio.sleep(0)
