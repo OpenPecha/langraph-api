@@ -10,7 +10,7 @@ This document chronicles the development journey of the API, capturing the key a
 
 ### Research & Insight: The Need for Decoupling
 
-*   **User Need**: Through iterative testing, it became clear that translation, glossary extraction, and standardization were distinct tasks that users wanted to control independently. A user might be happy with a translation but want to experiment with different glossary extraction settings.
+*   **User Need**: Through my experience, it became clear that translation, glossary extraction, and standardization were distinct tasks that users wanted to control independently. A user might be happy with a translation but want to experiment with different glossary extraction settings.
 *   **Technical Insight**: The "all-in-one" workflow created a data flow problem. Features like "Analyze Consistency" required the per-translation glossary data to be available, but other optimizations (like batching all glossary extractions at the end) meant this data wasn't ready in time. This conflict was the primary driver for the architectural refactor.
 
 ### Phase 2: The Great Refactoring - A Decoupled, Service-Oriented Architecture
