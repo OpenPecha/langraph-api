@@ -31,6 +31,7 @@ from .models.standardization import (
     StandardizationInputItem
 )
 from .prompts.tibetan_buddhist import RETRANSLATION_PROMPT, GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT
+from .models.pipeline import PipelineRequest, PipelineResponse
 
 # Import from root level graph module
 import sys
@@ -702,6 +703,88 @@ async def stream_apply_standardization(request: StandardizationRequest):
         stream_standardization_progress(request),
         media_type="text/event-stream"
     )
+
+
+@app.post("/pipeline/run", response_model=PipelineResponse, tags=["Pipeline"])
+async def run_pipeline(request: PipelineRequest) -> PipelineResponse:
+    """Run a customizable workflow by selecting stages and providing inputs.
+
+    Stages (in order):
+    - translate: uses existing translation workflow
+    - extract_glossary: runs glossary extraction on results/items
+    - analyze: runs standardization analysis
+    - apply_standardization: applies standardization pairs with minimal-change retranslation
+    """
+    aggregate: PipelineResponse = PipelineResponse(metadata={"stages": request.stages})
+
+    # Stage: translate
+    if "translate" in request.stages:
+        if not request.texts or not request.target_language:
+            raise HTTPException(status_code=400, detail="texts and target_language are required for translate stage")
+        workflow_request = TranslationRequest(
+            texts=request.texts,
+            target_language=request.target_language,
+            model_name=request.model_name,
+            text_type=request.text_type,
+            batch_size=request.batch_size,
+            model_params=request.model_params,
+            user_rules=request.user_rules,
+        )
+        final_state = await run_translation_workflow(workflow_request)
+        aggregate.results = final_state["final_results"]
+        aggregate.metadata.update({"translation": final_state.get("metadata", {})})
+
+    # Build items for downstream stages
+    items_source = request.items
+    if aggregate.results:
+        # Convert TranslationResult list into StandardizationInputItem-like dicts
+        items_source = [
+            {
+                "original_text": r.original_text,  # type: ignore[attr-defined]
+                "translated_text": r.translated_text,  # type: ignore[attr-defined]
+                "glossary": getattr(r, "glossary", []),
+            }
+            for r in aggregate.results
+        ]
+
+    # Stage: extract_glossary
+    if "extract_glossary" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for glossary extraction")
+        glossary_req = GlossaryExtractionRequest(items=items_source, model_name=request.model_name, batch_size=request.batch_size)  # type: ignore[arg-type]
+        aggregate.glossary = await extract_glossary(glossary_req)  # reuse handler logic
+
+    # Stage: analyze
+    if "analyze" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for analysis")
+        # If we have a new glossary, enrich items with glossary terms
+        if aggregate.glossary:
+            enriched = []
+            for item in items_source:
+                terms = [t for t in aggregate.glossary.terms if (t.source_term in item["original_text"] or t.translated_term in item["translated_text"]) ]
+                enriched.append({**item, "glossary": terms})
+            items_source = enriched
+        analysis_req = AnalysisRequest(items=items_source)  # type: ignore[arg-type]
+        analysis_resp = await analyze_consistency(analysis_req)
+        aggregate.inconsistent_terms = analysis_resp.inconsistent_terms
+
+    # Stage: apply_standardization
+    if "apply_standardization" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for standardization")
+        if not request.standardization_pairs:
+            raise HTTPException(status_code=400, detail="standardization_pairs is required for apply_standardization stage")
+        std_req = StandardizationRequest(
+            items=items_source,  # type: ignore[arg-type]
+            standardization_pairs=request.standardization_pairs,
+            model_name=request.model_name,
+            user_rules=request.user_rules,
+        )
+        std_resp = await apply_standardization(std_req)
+        aggregate.updated_items = std_resp.updated_items
+
+    return aggregate
 
 
 def create_app() -> FastAPI:
