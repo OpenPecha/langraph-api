@@ -460,10 +460,14 @@
                     <div class="setting-group">
                         <label for="model">Translation Model</label>
                         <select id="model">
-                            <option value="claude">Claude (Recommended)</option>
-                            <option value="claude-haiku">Claude Haiku (Fast)</option>
-                            <option value="claude-opus">Claude Opus (Best)</option>
-                            <option value="gemini-pro">Gemini Pro</option>
+                            <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (2025-02-19)</option>
+                            <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (2024-10-22)</option>
+                            <option value="claude-sonnet-4-20250514">Claude Sonnet 4.0 (2025-05-14)</option>
+                            <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (2024-10-22)</option>
+                            <option value="claude-3-opus-20240229">Claude 3 Opus (2024-02-29)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                            <option value="gemini-2.5-flash-thinking">Gemini 2.5 Flash (Thinking)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                         </select>
                     </div>
 
@@ -504,6 +508,157 @@ Form is emptiness, emptiness is form"
                     </button>
                 </div>
 
+                <div class="section-title" style="margin-top: 24px;">UCCA Generator (Optional)</div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px; margin-top: 8px;">
+                    <label for="uccaInput">UCCA Input Text</label>
+                    <textarea id="uccaInput" placeholder="Enter a single text for UCCA graph generation..."></textarea>
+                </div>
+
+                <div class="settings">
+                    <div class="setting-group">
+                        <label for="commentary1">Commentary 1 (optional)</label>
+                        <textarea id="commentary1" style="min-height: 60px; max-height: 120px;"></textarea>
+                    </div>
+                    <div class="setting-group">
+                        <label for="commentary2">Commentary 2 (optional)</label>
+                        <textarea id="commentary2" style="min-height: 60px; max-height: 120px;"></textarea>
+                    </div>
+                    <div class="setting-group">
+                        <label for="commentary3">Commentary 3 (optional)</label>
+                        <textarea id="commentary3" style="min-height: 60px; max-height: 120px;"></textarea>
+                    </div>
+                    <div class="setting-group">
+                        <label for="sanskritText">Sanskrit (optional)</label>
+                        <textarea id="sanskritText" style="min-height: 60px; max-height: 120px;"></textarea>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="uccaBtn" class="translate-btn">Generate UCCA</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 24px;">Gloss Generator (Optional)</div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px; margin-top: 8px;">
+                    <label for="glossInput">Gloss Input Text (one or multiple lines)</label>
+                    <textarea id="glossInput" placeholder="Enter text(s) for gloss generation..."></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="glossUcca">Optional UCCA Interpretation</label>
+                    <textarea id="glossUcca" style="min-height: 60px; max-height: 120px;" placeholder="Paste UCCA interpretation JSON or notes (optional)..."></textarea>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="glossBtn" class="translate-btn">Generate Gloss</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 24px;">Pipeline (UCCA → Gloss → Translation)</div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="pipelineSource">Pipeline Source</label>
+                    <textarea id="pipelineSource" style="min-height: 80px; max-height: 200px;" placeholder="Enter source text for pipeline..."></textarea>
+                </div>
+
+                <div class="settings" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <div class="setting-group">
+                        <label for="pipelineTargetLang">Pipeline Target Language (optional)</label>
+                        <input id="pipelineTargetLang" placeholder="e.g., english, chinese" />
+                    </div>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="pipelineCustomPrompt">Pipeline Custom Prompt (optional)</label>
+                    <textarea id="pipelineCustomPrompt" style="min-height: 80px; max-height: 200px;" placeholder="Must include {source}. Optional: {ucca} {gloss} {commentary1} {commentary2} {commentary3} {sanskrit}"></textarea>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                    <button id="pipelineUccaBtn" class="translate-btn">Step 1: Generate UCCA</button>
+                    <button id="pipelineGlossBtn" class="translate-btn">Step 2: Generate Gloss (use last UCCA)</button>
+                    <button id="pipelineTranslateBtn" class="translate-btn">Step 3: Translate (use last UCCA + Gloss)</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 24px;">Dharmamitra (KNN Mitra SSE)</div>
+
+                <div class="settings" style="margin-bottom: 8px;">
+                    <div class="setting-group">
+                        <label for="dmLanguage">Language</label>
+                        <input id="dmLanguage" value="english" />
+                    </div>
+                    <div class="setting-group">
+                        <label for="dmPassword">Password</label>
+                        <input id="dmPassword" value="sthiramati" />
+                    </div>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="dmQuery">Query (Tibetan)</label>
+                    <textarea id="dmQuery" style="min-height: 80px; max-height: 200px;"></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label><input type="checkbox" id="dmDoGrammar" /> do_grammar</label>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="dmMitraBtn" class="translate-btn">Run Mitra (SSE)</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 24px;">Dharmamitra (Gemini Non-Stream)</div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label><input type="checkbox" id="dmUseProModel" /> use_pro_model</label>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="dmGeminiBtn" class="translate-btn">Run Gemini (No Stream)</button>
+                </div>
+
+                <div class="section-title" style="margin-top: 24px;">Workflow Tester</div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowComboKey">Workflow Combo Key(s) (comma or newline separated)</label>
+                    <textarea id="workflowComboKey" style="min-height: 60px; max-height: 120px;" placeholder="source+ucca+gloss, source+ucca\nsource+gloss"></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowSource">Workflow Source (required)</label>
+                    <textarea id="workflowSource" style="min-height: 80px; max-height: 200px;" placeholder="Enter source text for workflow..."></textarea>
+                </div>
+
+                <div class="settings" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <div class="setting-group">
+                        <label for="workflowTargetLang">Workflow Target Language (optional)</label>
+                        <input id="workflowTargetLang" placeholder="e.g., english, chinese" />
+                    </div>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowCustomPrompt">Custom Prompt (optional)</label>
+                    <textarea id="workflowCustomPrompt" style="min-height: 80px; max-height: 200px;" placeholder="Must include {source}. Optional: {ucca} {gloss} {commentary1} {commentary2} {commentary3} {sanskrit}"></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowUccaJson">Workflow UCCA JSON (optional)</label>
+                    <textarea id="workflowUccaJson" style="min-height: 80px; max-height: 200px;" placeholder='{"nodes":[], "root_id":""}'></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowGlossJson">Workflow Gloss JSON (optional)</label>
+                    <textarea id="workflowGlossJson" style="min-height: 80px; max-height: 200px;" placeholder='{"Glossary":{}, "StandardizedText":{}, "analysis":[]}'></textarea>
+                </div>
+
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 8px;">
+                    <label for="workflowSanskrit">Workflow Sanskrit (optional)</label>
+                    <textarea id="workflowSanskrit" style="min-height: 60px; max-height: 120px;"></textarea>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button id="workflowRunBtn" class="translate-btn">Run Workflow</button>
+                    <button id="workflowClearBtn" class="clear-cache-btn">Clear Workflow Results</button>
+                </div>
+
                 <div class="progress-container" id="progressContainer">
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
@@ -534,6 +689,26 @@ Form is emptiness, emptiness is form"
                 <div id="consolidatedGlossaryContainer">
                     <div class="empty-state">Glossary will appear here after extraction.</div>
                 </div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    UCCA Results
+                </div>
+                <div id="uccaBatchContainer" style="background:#fff; border:1px solid #eee; border-radius:4px; padding:12px; min-height:120px;"></div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    Gloss Results
+                </div>
+                <div id="glossBatchContainer" style="background:#fff; border:1px solid #eee; border-radius:4px; padding:12px; min-height:120px;"></div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    Pipeline Translation
+                </div>
+                <div id="pipelineTranslationContainer" style="background:#fff; border:1px solid #eee; border-radius:4px; padding:12px; min-height:120px;"></div>
+
+                <div class="section-title" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;">
+                    Workflow Run Result
+                </div>
+                <div id="workflowResultContainer" style="background:#fff; border:1px solid #eee; border-radius:4px; padding:12px; min-height:120px;"></div>
             </div>
         </div>
     </div>
@@ -548,6 +723,9 @@ Form is emptiness, emptiness is form"
                 this.inconsistentTerms = {};
                 this.standardizationSelections = {};
                 this.proposedChanges = {}; // To hold changes before confirmation
+                // UCCA progress tracking
+                this.uccaTotalItems = 0;
+                this.uccaCompleted = 0;
                 
                 this.initializeElements();
                 this.attachEventListeners();
@@ -570,19 +748,337 @@ Form is emptiness, emptiness is form"
                     resultsContainer: document.getElementById('resultsContainer'),
                     resultCount: document.getElementById('resultCount'),
                     consolidatedGlossaryContainer: document.getElementById('consolidatedGlossaryContainer'),
-                    standardizationContainer: document.getElementById('standardizationContainer')
+                    standardizationContainer: document.getElementById('standardizationContainer'),
+                    // UCCA
+                    uccaInput: document.getElementById('uccaInput'),
+                    commentary1: document.getElementById('commentary1'),
+                    commentary2: document.getElementById('commentary2'),
+                    commentary3: document.getElementById('commentary3'),
+                    sanskritText: document.getElementById('sanskritText'),
+                    uccaBtn: document.getElementById('uccaBtn'),
+                    uccaOutput: document.getElementById('uccaOutput'),
+                    uccaBatchContainer: document.getElementById('uccaBatchContainer'),
+                    // Gloss
+                    glossInput: document.getElementById('glossInput'),
+                    glossUcca: document.getElementById('glossUcca'),
+                    glossBtn: document.getElementById('glossBtn'),
+                    glossBatchContainer: document.getElementById('glossBatchContainer')
+                    ,
+                    // Workflow tester elements
+                    workflowComboKey: document.getElementById('workflowComboKey'),
+                    workflowSource: document.getElementById('workflowSource'),
+                    workflowTargetLang: document.getElementById('workflowTargetLang'),
+                    workflowCustomPrompt: document.getElementById('workflowCustomPrompt'),
+                    workflowUccaJson: document.getElementById('workflowUccaJson'),
+                    workflowGlossJson: document.getElementById('workflowGlossJson'),
+                    workflowSanskrit: document.getElementById('workflowSanskrit'),
+                    workflowRunBtn: document.getElementById('workflowRunBtn'),
+                    workflowClearBtn: document.getElementById('workflowClearBtn'),
+                    workflowResultContainer: document.getElementById('workflowResultContainer'),
+                    // Pipeline elements
+                    pipelineSource: document.getElementById('pipelineSource'),
+                    pipelineTargetLang: document.getElementById('pipelineTargetLang'),
+                    pipelineCustomPrompt: document.getElementById('pipelineCustomPrompt'),
+                    pipelineUccaBtn: document.getElementById('pipelineUccaBtn'),
+                    pipelineGlossBtn: document.getElementById('pipelineGlossBtn'),
+                    pipelineTranslateBtn: document.getElementById('pipelineTranslateBtn'),
+                    pipelineTranslationContainer: document.getElementById('pipelineTranslationContainer')
                 };
             }
 
             attachEventListeners() {
                 this.elements.translateBtn.addEventListener('click', () => this.startTranslation());
                 this.elements.clearCacheBtn.addEventListener('click', () => this.handleClearCacheClick());
+                this.elements.uccaBtn.addEventListener('click', () => this.handleUccaStream());
+                this.elements.glossBtn.addEventListener('click', () => this.handleGlossStream());
+                this.elements.workflowRunBtn.addEventListener('click', () => this.handleWorkflowRun());
+                this.elements.workflowClearBtn.addEventListener('click', () => {
+                    this.elements.workflowResultContainer.innerHTML = '';
+                });
+                // Pipeline handlers
+                this.elements.pipelineUccaBtn.addEventListener('click', () => this.handlePipelineUcca());
+                this.elements.pipelineGlossBtn.addEventListener('click', () => this.handlePipelineGloss());
+                this.elements.pipelineTranslateBtn.addEventListener('click', () => this.handlePipelineTranslate());
+                // Dharmamitra
+                document.getElementById('dmMitraBtn').addEventListener('click', () => this.handleDmMitra());
+                document.getElementById('dmGeminiBtn').addEventListener('click', () => this.handleDmGemini());
                 
                 // Auto-resize textarea
                 this.elements.inputText.addEventListener('input', (e) => {
                     e.target.style.height = 'auto';
                     e.target.style.height = e.target.scrollHeight + 'px';
                 });
+            }
+
+            // --- Pipeline State ---
+            pipeline = {
+                lastUcca: null,
+                lastGloss: null,
+            };
+
+            // Step 1: Generate UCCA for the pipeline source
+            async handlePipelineUcca() {
+                const source = (this.elements.pipelineSource.value || '').trim();
+                if (!source) { alert('Enter Pipeline Source'); return; }
+                const payload = {
+                    items: [{
+                        input_text: source,
+                        commentary_1: (this.elements.commentary1.value || '').trim() || null,
+                        commentary_2: (this.elements.commentary2.value || '').trim() || null,
+                        commentary_3: (this.elements.commentary3.value || '').trim() || null,
+                        sanskrit_text: (this.elements.sanskritText.value || '').trim() || null,
+                    }],
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    batch_size: 1
+                };
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/ucca/generate/batch`;
+                    const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'UCCA batch failed');
+                    const item = (data && data[0]) || {};
+                    if (item.error) throw new Error(item.error);
+                    this.pipeline.lastUcca = item.ucca_graph || null;
+                    // Also show in UCCA results
+                    const pretty = this.escapeHtml(JSON.stringify(item.ucca_graph || {}, null, 2));
+                    const div = document.createElement('div');
+                    div.style = 'border-left:3px solid #28a745; padding:8px; margin:8px 0;';
+                    div.innerHTML = `<pre style="white-space:pre-wrap;">${pretty}</pre>`;
+                    this.elements.uccaBatchContainer.prepend(div);
+                } catch (e) {
+                    alert(`Pipeline UCCA error: ${e.message}`);
+                }
+            }
+
+            // Step 2: Generate Gloss using the last UCCA
+            async handlePipelineGloss() {
+                const source = (this.elements.pipelineSource.value || '').trim();
+                if (!source) { alert('Enter Pipeline Source'); return; }
+                const items = [source].map(t => ({
+                    input_text: t,
+                    ucca_interpretation: this.pipeline.lastUcca ? JSON.stringify(this.pipeline.lastUcca) : null,
+                    commentary_1: (this.elements.commentary1.value || '').trim() || null,
+                    commentary_2: (this.elements.commentary2.value || '').trim() || null,
+                    commentary_3: (this.elements.commentary3.value || '').trim() || null,
+                    sanskrit_text: (this.elements.sanskritText.value || '').trim() || null,
+                }));
+                const payload = { items, model_name: this.elements.model.value, model_params: {}, batch_size: 1 };
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/gloss/generate/batch`;
+                    const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Gloss batch failed');
+                    const item = (data && data[0]) || {};
+                    if (item.error) throw new Error(item.error);
+                    this.pipeline.lastGloss = {
+                        standardized_text: item.standardized_text,
+                        note: item.note,
+                        analysis: item.analysis,
+                        glossary: item.glossary,
+                    };
+                    const pretty = this.escapeHtml(JSON.stringify(this.pipeline.lastGloss, null, 2));
+                    const div = document.createElement('div');
+                    div.style = 'border-left:3px solid #28a745; padding:8px; margin:8px 0;';
+                    div.innerHTML = `<pre style="white-space:pre-wrap;">${pretty}</pre>`;
+                    this.elements.glossBatchContainer.prepend(div);
+                } catch (e) {
+                    alert(`Pipeline Gloss error: ${e.message}`);
+                }
+            }
+
+            // Step 3: Translate using workflow/run with combo based on available artifacts
+            async handlePipelineTranslate() {
+                const source = (this.elements.pipelineSource.value || '').trim();
+                if (!source) { alert('Enter Pipeline Source'); return; }
+                // Decide combo tokens
+                const tokens = ['source'];
+                if (this.pipeline.lastUcca) tokens.push('ucca');
+                if (this.pipeline.lastGloss) tokens.push('gloss');
+                if ((this.elements.sanskritText.value || '').trim()) tokens.push('sanskrit');
+                const combo = tokens.sort().join('+');
+
+                const payload = {
+                    source,
+                    ucca: this.pipeline.lastUcca ? JSON.stringify(this.pipeline.lastUcca) : null,
+                    gloss: this.pipeline.lastGloss ? JSON.stringify(this.pipeline.lastGloss) : null,
+                    sanskrit: (this.elements.sanskritText.value || '').trim() || null,
+                    commentaries: [
+                        (this.elements.commentary1.value || '').trim(),
+                        (this.elements.commentary2.value || '').trim(),
+                        (this.elements.commentary3.value || '').trim(),
+                    ].filter(Boolean) || null,
+                    model: this.elements.model.value || null,
+                    target_language: (this.elements.pipelineTargetLang.value || '').trim() || null,
+                };
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/workflow/run`;
+                    const body = {
+                        combo_key: combo,
+                        input: payload,
+                        model_name: this.elements.model.value || null,
+                        model_params: {},
+                        custom_prompt: (this.elements.pipelineCustomPrompt.value || '').trim() || null,
+                    };
+                    const res = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Workflow run failed');
+                    const pretty = this.escapeHtml(JSON.stringify({ combo, translation: data.translation }, null, 2));
+                    this.elements.pipelineTranslationContainer.innerHTML = `<pre style="white-space:pre-wrap;">${pretty}</pre>`;
+                } catch (e) {
+                    this.elements.pipelineTranslationContainer.innerHTML = `Error: ${this.escapeHtml(e.message)}`;
+                }
+            }
+
+            // --- Dharmamitra handlers ---
+            async handleDmMitra() {
+                const query = (document.getElementById('dmQuery').value || '').trim();
+                const language = (document.getElementById('dmLanguage').value || '').trim() || 'english';
+                const password = (document.getElementById('dmPassword').value || '').trim();
+                const doGrammar = document.getElementById('dmDoGrammar').checked;
+                if (!query || !password) { alert('Enter query and password'); return; }
+
+                // Show progress
+                this.showProgress();
+                this.updateProgress(0, 'Starting Dharmamitra Mitra SSE...');
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/dharmamitra/knn-translate-mitra`;
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+                        body: JSON.stringify({ query, language, password, do_grammar: doGrammar })
+                    });
+                    if (!response.ok) throw new Error(`SSE failed: ${response.status}`);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let collected = '';
+                    const processStream = ({ done, value }) => {
+                        if (done) { this.hideProgress(); this.elements.pipelineTranslationContainer.innerHTML = `<pre style="white-space:pre-wrap;">${this.escapeHtml(collected)}</pre>`; return; }
+                        buffer += decoder.decode(value, { stream: true });
+                        buffer = buffer.replace(/\r\n/g, '\n');
+                        let boundary;
+                        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+                            const message = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 2);
+                            const lines = message.split('\n');
+                            for (const line of lines) {
+                                const m = line.match(/^data:\s?(.*)$/);
+                                if (m) { collected += m[1]; }
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+                    reader.read().then(processStream);
+                } catch (e) {
+                    this.hideProgress();
+                    this.elements.pipelineTranslationContainer.innerHTML = `Mitra SSE error: ${this.escapeHtml(e.message)}`;
+                }
+            }
+
+            async handleDmGemini() {
+                const query = (document.getElementById('dmQuery').value || '').trim();
+                const language = (document.getElementById('dmLanguage').value || '').trim() || 'english';
+                const password = (document.getElementById('dmPassword').value || '').trim();
+                const doGrammar = document.getElementById('dmDoGrammar').checked;
+                const usePro = document.getElementById('dmUseProModel').checked;
+                if (!query || !password) { alert('Enter query and password'); return; }
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/dharmamitra/knn-translate-gemini-no-stream`;
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query, language, password, do_grammar: doGrammar, use_pro_model: usePro })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Gemini call failed');
+                    const translation = typeof data.translation === 'string' ? data.translation : JSON.stringify(data);
+                    this.elements.pipelineTranslationContainer.innerHTML = `<pre style="white-space:pre-wrap;">${this.escapeHtml(translation)}</pre>`;
+                } catch (e) {
+                    this.elements.pipelineTranslationContainer.innerHTML = `Gemini error: ${this.escapeHtml(e.message)}`;
+                }
+            }
+
+            parseOptionalJson(text) {
+                const t = (text || '').trim();
+                if (!t) return null;
+                try { return JSON.parse(t); } catch (_) { return t; }
+            }
+
+            async handleWorkflowRun() {
+                const keysRaw = (this.elements.workflowComboKey.value || '').trim();
+                const source = (this.elements.workflowSource.value || '').trim();
+                if (!keysRaw) { alert('Enter workflow combo key(s)'); return; }
+                if (!source) { alert('Workflow source is required'); return; }
+
+                const ucca = this.parseOptionalJson(this.elements.workflowUccaJson.value);
+                const gloss = this.parseOptionalJson(this.elements.workflowGlossJson.value);
+                const sanskrit = (this.elements.workflowSanskrit.value || '').trim() || null;
+
+                const commentaries = [
+                    (this.elements.commentary1.value || '').trim(),
+                    (this.elements.commentary2.value || '').trim(),
+                    (this.elements.commentary3.value || '').trim(),
+                ].filter(Boolean);
+
+                const payload = {
+                    source,
+                    commentaries: commentaries.length ? commentaries : null,
+                    ucca: ucca || null,
+                    gloss: gloss || null,
+                    sanskrit: sanskrit,
+                    model: this.elements.model.value || null,
+                    target_language: (this.elements.workflowTargetLang.value || '').trim() || null,
+                };
+
+                const keys = keysRaw
+                    .split(/[\,\n]/)
+                    .map(k => k.trim())
+                    .filter(Boolean);
+
+                let baseUrl = window.location.href;
+                if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+
+                for (const key of keys) {
+                    const card = document.createElement('div');
+                    card.style = 'border-left:3px solid #4a90e2; padding:8px; margin:8px 0;';
+                    card.innerHTML = `<div style="color:#666; font-size:0.85em;">Requesting: ${this.escapeHtml(key)}</div>`;
+                    this.elements.workflowResultContainer.appendChild(card);
+                    try {
+                        const apiUrl = `${baseUrl}/workflow/run`;
+                        const body = {
+                            combo_key: key,
+                            input: payload,
+                            model_name: this.elements.model.value || null,
+                            model_params: {},
+                            custom_prompt: (this.elements.workflowCustomPrompt.value || '').trim() || null,
+                        };
+                        const res = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(body),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || 'Workflow run failed');
+                        const pretty = this.escapeHtml(JSON.stringify({ provided_key: key, ...data }, null, 2));
+                        card.innerHTML = `<pre style="white-space:pre-wrap;">${pretty}</pre>`;
+                    } catch (e) {
+                        card.innerHTML = `Error for ${this.escapeHtml(key)}: ${this.escapeHtml(e.message)}`;
+                    }
+                }
             }
 
             startTranslation() {
@@ -615,6 +1111,485 @@ Form is emptiness, emptiness is form"
                 };
 
                 this.connectToStream(requestData);
+            }
+
+            async handleUccaGenerate() {
+                const btn = this.elements.uccaBtn;
+                const text = (this.elements.uccaInput.value || '').trim();
+                if (!text) {
+                    alert('Please enter input text for UCCA generation');
+                    return;
+                }
+                btn.disabled = true;
+                const original = btn.textContent;
+                btn.textContent = 'Generating...';
+
+                const payload = {
+                    input_text: text,
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    commentary_1: (this.elements.commentary1.value || '').trim() || null,
+                    commentary_2: (this.elements.commentary2.value || '').trim() || null,
+                    commentary_3: (this.elements.commentary3.value || '').trim() || null,
+                    sanskrit_text: (this.elements.sanskritText.value || '').trim() || null
+                };
+
+                try {
+                    const res = await fetch('/ucca/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        throw new Error(data.detail || data.error || 'UCCA generation failed');
+                    }
+
+                    if (data.error) {
+                        this.elements.uccaOutput.textContent = `Error: ${data.error}`;
+                        return;
+                    }
+
+                    // Prefer raw_json if present; pretty print
+                    if (data.raw_json) {
+                        try {
+                            const parsed = JSON.parse(data.raw_json);
+                            this.elements.uccaOutput.textContent = JSON.stringify(parsed, null, 2);
+                        } catch (_) {
+                            // fallback to raw string
+                            this.elements.uccaOutput.textContent = data.raw_json;
+                        }
+                    } else if (data.ucca_graph) {
+                        this.elements.uccaOutput.textContent = JSON.stringify(data.ucca_graph, null, 2);
+                    } else {
+                        this.elements.uccaOutput.textContent = 'No UCCA graph returned.';
+                    }
+                } catch (e) {
+                    this.elements.uccaOutput.textContent = `Error: ${e.message}`;
+                } finally {
+                    btn.textContent = original;
+                    btn.disabled = false;
+                }
+            }
+
+            buildUccaItem(text) {
+                return {
+                    input_text: text,
+                    commentary_1: (this.elements.commentary1.value || '').trim() || null,
+                    commentary_2: (this.elements.commentary2.value || '').trim() || null,
+                    commentary_3: (this.elements.commentary3.value || '').trim() || null,
+                    sanskrit_text: (this.elements.sanskritText.value || '').trim() || null
+                };
+            }
+
+            async handleUccaBatch() {
+                const input = (this.elements.uccaInput.value || '').trim();
+                if (!input) {
+                    alert('Enter UCCA input text (you can separate items by newlines)');
+                    return;
+                }
+                const texts = input.split('\n').map(s => s.trim()).filter(Boolean);
+                const items = texts.map(t => this.buildUccaItem(t));
+
+                this.elements.uccaBatchContainer.innerHTML = 'Running batch...';
+
+                const payload = {
+                    items,
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) {
+                        baseUrl = baseUrl.replace('/static/index.html', '');
+                    }
+                    const apiUrl = `${baseUrl}/ucca/generate/batch`;
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Batch failed');
+
+                    const html = (data || []).map(r => {
+                        if (r.error) {
+                            return `<div style="border-left:3px solid #dc3545; padding:8px; margin:8px 0;">#${r.index}: Error: ${this.escapeHtml(r.error)}</div>`;
+                        }
+                        return `<div style="border-left:3px solid #28a745; padding:8px; margin:8px 0;">#${r.index}: <pre style="white-space:pre-wrap;">${this.escapeHtml(JSON.stringify(r.ucca_graph, null, 2))}</pre></div>`;
+                    }).join('');
+                    this.elements.uccaBatchContainer.innerHTML = html || 'No results';
+                } catch (e) {
+                    this.elements.uccaBatchContainer.innerHTML = `Error: ${this.escapeHtml(e.message)}`;
+                }
+            }
+
+            buildGlossItem(text) {
+                return {
+                    input_text: text,
+                    // reuse the same commentary inputs
+                    ucca_interpretation: (this.elements.glossUcca.value || '').trim() || null,
+                    commentary_1: (this.elements.commentary1.value || '').trim() || null,
+                    commentary_2: (this.elements.commentary2.value || '').trim() || null,
+                    commentary_3: (this.elements.commentary3.value || '').trim() || null,
+                    sanskrit_text: (this.elements.sanskritText.value || '').trim() || null,
+                };
+            }
+
+            async handleGlossBatch() {
+                const input = (this.elements.glossInput.value || '').trim();
+                if (!input) {
+                    alert('Enter input text(s) for Gloss generation');
+                    return;
+                }
+                const texts = input.split('\n').map(s => s.trim()).filter(Boolean);
+                const items = texts.map(t => this.buildGlossItem(t));
+
+                this.elements.glossBatchContainer.innerHTML = 'Running gloss batch...';
+
+                const payload = {
+                    items,
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/gloss/generate/batch`;
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || 'Batch failed');
+
+                    const html = (data || []).map(r => {
+                        if (r.error) {
+                            return `<div style="border-left:3px solid #dc3545; padding:8px; margin:8px 0;">#${r.index}: Error: ${this.escapeHtml(r.error)}</div>`;
+                        }
+                        const body = {
+                            standardized_text: r.standardized_text,
+                            note: r.note,
+                            analysis: r.analysis,
+                            glossary: r.glossary,
+                        };
+                        return `<div style="border-left:3px solid #28a745; padding:8px; margin:8px 0;">#${r.index}: <pre style="white-space:pre-wrap;">${this.escapeHtml(JSON.stringify(body, null, 2))}</pre></div>`;
+                    }).join('');
+                    this.elements.glossBatchContainer.innerHTML = html || 'No results';
+                } catch (e) {
+                    this.elements.glossBatchContainer.innerHTML = `Error: ${this.escapeHtml(e.message)}`;
+                }
+            }
+
+            async handleGlossStream() {
+                const input = (this.elements.glossInput.value || '').trim();
+                if (!input) {
+                    alert('Enter input text(s) for Gloss generation');
+                    return;
+                }
+                const texts = input.split('\n').map(s => s.trim()).filter(Boolean);
+                const items = texts.map(t => this.buildGlossItem(t));
+
+                const payload = {
+                    items,
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                this.elements.glossBatchContainer.innerHTML = '';
+                this.showProgress();
+                this.updateProgress(0, 'Starting Gloss generation...');
+
+                try {
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) baseUrl = baseUrl.replace('/static/index.html', '');
+                    const apiUrl = `${baseUrl}/gloss/generate/stream`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        let serverText = '';
+                        try { serverText = await response.text(); } catch (_) {}
+                        throw new Error(`Stream failed${serverText ? `: ${serverText}` : ''}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    const processStream = ({ done, value }) => {
+                        if (done) { this.hideProgress(); return; }
+
+                        buffer += decoder.decode(value, { stream: true });
+                        buffer = buffer.replace(/\r\n/g, '\n');
+                        let boundary;
+                        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+                            const message = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 2);
+
+                            const lines = message.split('\n');
+                            const dataLines = [];
+                            for (const line of lines) {
+                                const match = line.match(/^data:\s?(.*)$/);
+                                if (match) dataLines.push(match[1]);
+                            }
+                            let jsonStr = dataLines.join('\n').trim();
+                            if (!jsonStr) continue;
+                            jsonStr = jsonStr.replace(/^(data:\s*)+/, '').trim();
+                            try {
+                                const candidate = jsonStr.trim();
+                                if (!(candidate.startsWith('{') || candidate.startsWith('['))) {
+                                    continue;
+                                }
+                                const data = JSON.parse(candidate);
+                                this.handleGlossStreamEvent(data);
+                            } catch (e) {
+                                console.error('Gloss SSE Parse Error:', e, 'message:', message);
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+                    reader.read().then(processStream);
+                } catch (e) {
+                    this.elements.glossBatchContainer.innerHTML = `Stream error: ${this.escapeHtml(e.message)}. Falling back to batch...`;
+                    this.hideProgress();
+                    await this.handleGlossBatch();
+                }
+            }
+
+            handleGlossStreamEvent(data) {
+                try { this.addStatusLog(data); } catch (_) {}
+                switch (data.type) {
+                    case 'gloss_start':
+                        this.elements.glossBatchContainer.innerHTML = '';
+                        break;
+                    case 'gloss_item_start':
+                        // optional progress updates could be added here
+                        break;
+                    case 'gloss_item_completed': {
+                        const body = {
+                            standardized_text: data.standardized_text,
+                            note: data.note,
+                            analysis: data.analysis,
+                            glossary: data.glossary,
+                        };
+                        const resultEl = document.createElement('div');
+                        resultEl.style = "border-left:3px solid #28a745; padding:8px; margin:8px 0;";
+                        resultEl.innerHTML = `#${data.index}: <pre style=\"white-space:pre-wrap;\">${this.escapeHtml(JSON.stringify(body, null, 2))}</pre>`;
+                        this.elements.glossBatchContainer.appendChild(resultEl);
+                        break; }
+                    case 'gloss_item_error': {
+                        const errorEl = document.createElement('div');
+                        errorEl.style = "border-left:3px solid #dc3545; padding:8px; margin:8px 0;";
+                        errorEl.innerHTML = `#${data.index}: Error: ${this.escapeHtml(data.error || 'unknown')}`;
+                        this.elements.glossBatchContainer.appendChild(errorEl);
+                        break; }
+                    case 'completion': {
+                        // Render aggregated results consistently
+                        if (Array.isArray(data.results)) {
+                            this.elements.glossBatchContainer.innerHTML = '';
+                            data.results.forEach(r => {
+                                if (r.error) {
+                                    const errorEl = document.createElement('div');
+                                    errorEl.style = "border-left:3px solid #dc3545; padding:8px; margin:8px 0;";
+                                    errorEl.innerHTML = `#${r.index}: Error: ${this.escapeHtml(r.error || 'unknown')}`;
+                                    this.elements.glossBatchContainer.appendChild(errorEl);
+                                } else {
+                                    const body = {
+                                        standardized_text: r.standardized_text,
+                                        note: r.note,
+                                        analysis: r.analysis,
+                                        glossary: r.glossary,
+                                    };
+                                    const resultEl = document.createElement('div');
+                                    resultEl.style = "border-left:3px solid #28a745; padding:8px; margin:8px 0;";
+                                    resultEl.innerHTML = `#${r.index}: <pre style=\"white-space:pre-wrap;\">${this.escapeHtml(JSON.stringify(body, null, 2))}</pre>`;
+                                    this.elements.glossBatchContainer.appendChild(resultEl);
+                                }
+                            });
+                        }
+                        this.hideProgress();
+                        break; }
+                }
+                this.elements.glossBatchContainer.scrollTop = this.elements.glossBatchContainer.scrollHeight;
+            }
+
+            async handleUccaStream() {
+                const input = (this.elements.uccaInput.value || '').trim();
+                if (!input) {
+                    alert('Enter UCCA input text (you can separate items by newlines)');
+                    return;
+                }
+                const texts = input.split('\n').map(s => s.trim()).filter(Boolean);
+                const items = texts.map(t => this.buildUccaItem(t));
+
+                const payload = {
+                    items,
+                    model_name: this.elements.model.value,
+                    model_params: {},
+                    batch_size: parseInt(this.elements.batchSize.value)
+                };
+
+                this.elements.uccaBatchContainer.innerHTML = '';
+                this.showProgress();
+                this.updateProgress(0, 'Starting UCCA generation...');
+
+                try {
+                    // Determine base URL similar to translation stream for robustness
+                    let baseUrl = window.location.href;
+                    if (baseUrl.includes('/static/index.html')) {
+                        baseUrl = baseUrl.replace('/static/index.html', '');
+                    }
+                    const apiUrl = `${baseUrl}/ucca/generate/stream`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        let serverText = '';
+                        try { serverText = await response.text(); } catch (_) {}
+                        throw new Error(`Stream failed${serverText ? `: ${serverText}` : ''}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    const processStream = ({ done, value }) => {
+                        if (done) {
+                            this.hideProgress();
+                            return;
+                        }
+
+                        buffer += decoder.decode(value, { stream: true });
+                        // Normalize CRLF to LF to robustly detect SSE message boundaries
+                        buffer = buffer.replace(/\r\n/g, '\n');
+                        let boundary;
+                        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+                            const message = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 2); // Consume message and separator
+
+                            // Robust SSE parsing: collect all `data:` lines in the event and join with newlines
+                            const lines = message.split('\n');
+                            const dataLines = [];
+                            for (const line of lines) {
+                                const match = line.match(/^data:\s?(.*)$/);
+                                if (match) {
+                                    dataLines.push(match[1]);
+                                }
+                            }
+                            let jsonStr = dataLines.join('\n').trim();
+                            if (!jsonStr) continue;
+                            // Some servers may duplicate the 'data:' prefix inside the payload (e.g., 'data: data: {...}')
+                            // Strip any leading repeated 'data:' prefixes before parsing JSON
+                            jsonStr = jsonStr.replace(/^(data:\s*)+/, '').trim();
+                            try {
+                                const candidate = jsonStr.trim();
+                                if (!(candidate.startsWith('{') || candidate.startsWith('['))) {
+                                    // Not a JSON event payload; skip gracefully
+                                    continue;
+                                }
+                                const data = JSON.parse(candidate);
+                                this.handleUccaStreamEvent(data);
+                            } catch (e) {
+                                console.error('SSE JSON Parse Error:', e, 'message:', message);
+                            }
+                        }
+                        return reader.read().then(processStream);
+                    };
+                    reader.read().then(processStream);
+                } catch (e) {
+                    // Show error and fallback to non-streaming batch for reliability
+                    this.elements.uccaBatchContainer.innerHTML = `Stream error: ${this.escapeHtml(e.message)}. Falling back to batch...`;
+                    this.hideProgress();
+                    await this.handleUccaBatch();
+                }
+            }
+
+            handleUccaStreamEvent(data) {
+                // Maintain robust progress based on start/completion counts
+                if (data.type === 'ucca_start' && typeof data.total_items === 'number') {
+                    this.uccaTotalItems = data.total_items;
+                    this.uccaCompleted = 0;
+                    this.updateProgress(0, `Starting UCCA for ${data.total_items} items...`);
+                }
+
+                switch (data.type) {
+                    case 'ucca_start':
+                        this.elements.uccaBatchContainer.innerHTML = ''; // Clear previous results
+                        break;
+                    case 'ucca_item_start':
+                        if (this.uccaTotalItems) {
+                            const percentStart = (this.uccaCompleted / this.uccaTotalItems) * 100;
+                            this.updateProgress(percentStart, `Item #${data.index} started...`);
+                        }
+                        break;
+                    case 'ucca_item_completed':
+                        {
+                            this.uccaCompleted += 1;
+                            if (this.uccaTotalItems) {
+                                const percentDone = (this.uccaCompleted / this.uccaTotalItems) * 100;
+                                this.updateProgress(percentDone, `Item #${data.index} completed.`);
+                            }
+                            const pretty = JSON.stringify(data.ucca_graph || {}, null, 2);
+                            const resultEl = document.createElement('div');
+                            resultEl.style = "border-left:3px solid #28a745; padding:8px; margin:8px 0;";
+                            resultEl.innerHTML = `#${data.index}: <pre style="white-space:pre-wrap;">${this.escapeHtml(pretty)}</pre>`;
+                            this.elements.uccaBatchContainer.appendChild(resultEl);
+                            break;
+                        }
+                    case 'ucca_item_error':
+                        this.uccaCompleted += 1;
+                        if (this.uccaTotalItems) {
+                            const percentErr = (this.uccaCompleted / this.uccaTotalItems) * 100;
+                            this.updateProgress(percentErr, `Item #${data.index} failed.`);
+                        }
+                        const errorEl = document.createElement('div');
+                        errorEl.style = "border-left:3px solid #dc3545; padding:8px; margin:8px 0;";
+                        errorEl.innerHTML = `#${data.index}: Error: ${this.escapeHtml(data.error || 'unknown')}`;
+                        this.elements.uccaBatchContainer.appendChild(errorEl);
+                        break;
+                    case 'completion':
+                        this.hideProgress();
+                        this.updateProgress(100, "Completed.");
+                        // Render the final aggregated results to ensure consistency
+                        if (Array.isArray(data.results)) {
+                            this.elements.uccaBatchContainer.innerHTML = ''; // Clear intermediate results
+                            data.results.forEach(result => {
+                                if (result.error) {
+                                    const errorEl = document.createElement('div');
+                                    errorEl.style = "border-left:3px solid #dc3545; padding:8px; margin:8px 0;";
+                                    errorEl.innerHTML = `#${result.index}: Error: ${this.escapeHtml(result.error || 'unknown')}`;
+                                    this.elements.uccaBatchContainer.appendChild(errorEl);
+                                } else if (result.ucca_graph) {
+                                    const pretty = JSON.stringify(result.ucca_graph, null, 2);
+                                    const resultEl = document.createElement('div');
+                                    resultEl.style = "border-left:3px solid #28a745; padding:8px; margin:8px 0;";
+                                    resultEl.innerHTML = `#${result.index}: <pre style="white-space:pre-wrap;">${this.escapeHtml(pretty)}</pre>`;
+                                    this.elements.uccaBatchContainer.appendChild(resultEl);
+                                }
+                            });
+                        }
+                        break;
+                }
+                this.elements.uccaBatchContainer.scrollTop = this.elements.uccaBatchContainer.scrollHeight;
             }
 
             connectToStream(requestData) {
