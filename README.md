@@ -14,6 +14,8 @@ A sophisticated, multi-stage API for translating, analyzing, and standardizing T
 -   **Streaming First**: Real-time events for all long-running operations, providing a transparent and interactive user experience.
 -   **Intelligent Standardization**: A powerful suite of tools to analyze and enforce terminological consistency across large datasets.
 -   **Multi-Model Support**: Dynamically route requests to models from Anthropic, OpenAI, and Google.
+    - Anthropic (exact IDs only): `claude-3-7-sonnet-20250219`, `claude-3-5-sonnet-20241022`, `claude-sonnet-4-20250514`, `claude-3-5-haiku-20241022`, `claude-3-opus-20240229`.
+    - Google: `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-thinking` (virtual alias; same underlying model with thinking enabled).
 -   **Performance Optimized**: In-memory caching for repeated requests and parallel, batched processing for glossary and standardization tasks.
 -   **Comprehensive Documentation**: Includes a full API reference, an architectural overview, and a guide to the project's evolution.
 
@@ -72,13 +74,15 @@ For a deep dive into the architecture, the key technical decisions, and the proj
     pip install -r requirements.txt
     ```
 
-3.  **Configure API Keys**:
+3.  **Configure API Keys & Env**:
     Create a `.env` file in the project root and add your API keys.
     ```env
     # .env
     ANTHROPIC_API_KEY="your-anthropic-key"
     OPENAI_API_KEY="your-openai-key"
     GEMINI_API_KEY="your-google-key"
+    # Optional: Dharmamitra upstream password used by proxy endpoints if request omits it
+    DHARMAMITRA_PASSWORD="sthiramati"
     ```
 
 #### 3. Run the Server
@@ -112,6 +116,59 @@ curl -X POST http://localhost:8001/glossary/extract -H "Content-Type: applicatio
 }' > glossary_output.json
 ```
 *(Requires `jq` to be installed)*
+
+---
+
+### New: Flexible Workflow Endpoint (final translation)
+
+Production endpoint to run the final translation with optional inputs and an optional custom prompt.
+
+- POST `/workflow/run`
+
+Request body:
+```json
+{
+  "combo_key": "source+ucca+gloss",          
+  "input": {
+    "source": "...",                         
+    "ucca": "...",                          
+    "gloss": "...",                         
+    "commentaries": ["...", "..."],        
+    "sanskrit": "...",                      
+    "target_language": "english",           
+    "model": "claude-3-7-sonnet-20250219"   
+  },
+  "model_name": "claude-3-7-sonnet-20250219", 
+  "model_params": {},
+  "custom_prompt": "Translate {source} into {sanskrit} style..." 
+}
+```
+
+Notes:
+- `combo_key` is order-independent and must always include `source`. Other tokens (`ucca`, `gloss`, `sanskrit`, `commentariesK`) are inferred for validation.
+- `custom_prompt` is optional but must include `{source}`. Optional placeholders: `{ucca}`, `{gloss}`, `{commentary1}`, `{commentary2}`, `{commentary3}`, `{sanskrit}`.
+- Returns minimal JSON:
+```json
+{ "combo_key": "gloss+source+ucca", "translation": "..." }
+```
+
+- POST `/workflow/run/batch` accepts the same `combo_key` and an array of `items` (each `WorkflowInput`), returning an array of `{ index, translation | error }`.
+
+---
+
+### New: Dharmamitra Proxy Endpoints
+
+These proxy endpoints allow quick testing against Dharmamitra’s upstream APIs from the same UI/server.
+
+- Streaming KNN Mitra (SSE)
+  - POST `/dharmamitra/knn-translate-mitra`
+  - Body: `{ "query": "...", "language": "english", "password": "..." }`
+  - Notes: `language` is lowercased; `do_grammar` is forced to `false`. If `password` is omitted, the server uses `DHARMAMITRA_PASSWORD` from `.env`.
+
+- Gemini (non-stream)
+  - POST `/dharmamitra/knn-translate-gemini-no-stream`
+  - Body: `{ "query": "...", "language": "english", "password": "..." }`
+  - Notes: `do_grammar` and `use_pro_model` are forced to `false`. `language` lowercased. Falls back to `DHARMAMITRA_PASSWORD` if not provided.
 
 ---
 
