@@ -1220,6 +1220,15 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
 
     # Render inputs sections
     commentary_text = "\n\n".join((inputs.commentaries or [])[:3]) if inputs.commentaries else ""
+    # Formatted commentaries block for {commentaries}/{commenteries} placeholder
+    commentaries_block = ""
+    if inputs.commentaries:
+        lines: list[str] = []
+        for idx, c in enumerate(inputs.commentaries[:3]):
+            c_str = (c or "").strip()
+            if c_str:
+                lines.append(f"commentary {idx+1}: {c_str}")
+        commentaries_block = "\n".join(lines)
     ucca_text = json.dumps(inputs.ucca, ensure_ascii=False, indent=2) if isinstance(inputs.ucca, dict) else (inputs.ucca or "")
     gloss_text = json.dumps(inputs.gloss, ensure_ascii=False, indent=2) if isinstance(inputs.gloss, dict) else (inputs.gloss or "")
     sanskrit_text = inputs.sanskrit or ""
@@ -1237,6 +1246,10 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
             "commentary1": (inputs.commentaries[0] if inputs.commentaries and len(inputs.commentaries) > 0 else ""),
             "commentary2": (inputs.commentaries[1] if inputs.commentaries and len(inputs.commentaries) > 1 else ""),
             "commentary3": (inputs.commentaries[2] if inputs.commentaries and len(inputs.commentaries) > 2 else ""),
+            # Support a single block placeholder for all commentaries
+            "commentaries": commentaries_block,
+            # Common misspelling alias
+            "commenteries": commentaries_block,
             "sanskrit": sanskrit_text,
         }
         try:
