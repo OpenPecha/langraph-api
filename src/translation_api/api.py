@@ -1162,7 +1162,7 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
     """
     inputs = request.input
     combo_key = request.combo_key
-    model_name = request.model_name or inputs.model or "claude-3-7-sonnet-20250219"
+    model_name = request.model_name or "claude-3-7-sonnet-20250219"
 
     if not inputs.source:
         raise HTTPException(status_code=400, detail="'source' is required")

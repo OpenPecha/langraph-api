@@ -23,9 +23,6 @@ class WorkflowInput(BaseModel):
     sanskrit: Optional[str] = Field(
         default=None, description="Optional Sanskrit source text"
     )
-    model: Optional[str] = Field(
-        default=None, description="Optional model to be used by downstream"
-    )
     target_language: Optional[str] = Field(
         default=None, description="Target language (name or ISO code). If absent, model may infer."
     )
