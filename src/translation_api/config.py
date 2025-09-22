@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
     gemini_api_key: Optional[str] = Field(None, env="GEMINI_API_KEY")
+    # External service credentials
+    dharmamitra_password: Optional[str] = Field(None, env="DHARMAMITRA_PASSWORD")
     
     # LangSmith Configuration
     langsmith_api_key: Optional[str] = Field(None, env="LANGSMITH_API_KEY")

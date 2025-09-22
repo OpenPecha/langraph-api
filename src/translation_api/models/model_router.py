@@ -14,15 +14,20 @@ from ..config import get_settings
 
 class SupportedModel(Enum):
     """Enumeration of supported models."""
-    CLAUDE = "claude"
-    CLAUDE_SONNET = "claude-sonnet"
-    CLAUDE_HAIKU = "claude-haiku"
-    CLAUDE_OPUS = "claude-opus"
+    # Anthropic - use exact model IDs
+    CLAUDE_3_5_SONNET_20241022 = "claude-3-5-sonnet-20241022"
+    CLAUDE_3_7_SONNET_20250219 = "claude-3-7-sonnet-20250219"
+    CLAUDE_SONNET_4_20250514 = "claude-sonnet-4-20250514"
+    CLAUDE_3_5_HAIKU_20241022 = "claude-3-5-haiku-20241022"
+    CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
+    # OpenAI
     GPT4 = "gpt-4"
     GPT4_TURBO = "gpt-4-turbo"
     GPT35_TURBO = "gpt-3.5-turbo"
-    GEMINI_PRO = "gemini-pro"
+    # Google
+    GEMINI_2_5_PRO = "gemini-2.5-pro"
     GEMINI_PRO_VISION = "gemini-pro-vision"
+    GEMINI_2_5_FLASH = "gemini-2.5-flash"
 
 
 class ModelRouter:
@@ -65,13 +70,25 @@ class ModelRouter:
             "max_tokens": kwargs.get("max_tokens", 4000),
         }
         
-        if model_name in ["claude", "claude-sonnet", "claude-haiku", "claude-opus"]:
+        if model_name in [
+            "claude-3-5-sonnet-20241022",
+            "claude-3-7-sonnet-20250219",
+            "claude-sonnet-4-20250514",
+            "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229",
+        ]:
             return self._create_anthropic_model(model_name, default_configs, **kwargs)
         
         elif model_name in ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]:
             return self._create_openai_model(model_name, default_configs, **kwargs)
         
-        elif model_name in ["gemini-pro", "gemini-pro-vision"]:
+        elif model_name in [
+            "gemini-2.5-pro",
+            "gemini-pro",
+            "gemini-pro-vision",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-thinking",
+        ]:
             return self._create_gemini_model(model_name, default_configs, **kwargs)
         
         else:
@@ -81,17 +98,10 @@ class ModelRouter:
         """Create an Anthropic (Claude) model instance."""
         if not self.settings.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY is required for Claude models")
-        
-        # Map model names to Anthropic model identifiers
-        model_mapping = {
-            "claude": "claude-3-5-sonnet-20241022",
-            "claude-sonnet": "claude-3-5-sonnet-20241022",
-            "claude-haiku": "claude-3-5-haiku-20241022",
-            "claude-opus": "claude-3-opus-20240229"
-        }
-        
-        model_id = model_mapping.get(model_name, "claude-3-5-sonnet-20241022")
-        
+
+        # Expect exact Anthropic model IDs passed through
+        model_id = model_name
+
         return ChatAnthropic(
             anthropic_api_key=self.settings.anthropic_api_key,
             model=model_id,
@@ -118,13 +128,38 @@ class ModelRouter:
         if not self.settings.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required for Gemini models")
         
-        return ChatGoogleGenerativeAI(
+        provider_model_name = model_name
+        if model_name == "gemini-2.5-flash-thinking":
+            # Alias to the actual provider model id
+            provider_model_name = "gemini-2.5-flash"
+
+        # Determine desired max_output_tokens (prefer generation_config override)
+        user_gc = kwargs.get("generation_config") or {}
+        max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 32000))
+
+        base_model = ChatGoogleGenerativeAI(
             google_api_key=self.settings.gemini_api_key,
-            model=model_name,
+            model=provider_model_name,
             temperature=default_configs["temperature"],
-            max_output_tokens=default_configs["max_tokens"],
+            max_output_tokens=max_out,
             **{k: v for k, v in kwargs.items() if k not in ["temperature", "max_tokens"]}
         )
+        # Default generation_config with thinking control per model variant
+        # Baseline: bias JSON for non-structured calls and lift output cap
+        base_gc = {"response_mime_type": "application/json", "max_output_tokens": max_out, **user_gc}
+        # Thinking budget logic
+        if model_name == "gemini-2.5-flash":
+            # Plain flash: no thinking
+            thinking_gc = {"thinking_config": {"thinking_budget": 0}}
+        elif model_name == "gemini-2.5-flash-thinking":
+            # Virtual model: flash with thinking
+            thinking_gc = {"thinking_config": {"thinking_budget": -1}}
+        else:
+            # Other Gemini variants default to with thinking
+            thinking_gc = {"thinking_config": {"thinking_budget": -1}}
+
+        default_generation_config = {**base_gc, **thinking_gc}
+        return _GeminiModelWrapper(base_model, default_generation_config)
     
     def get_available_models(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -137,21 +172,33 @@ class ModelRouter:
         
         if self.settings.anthropic_api_key:
             available.update({
-                "claude": {
+                "claude-3-5-sonnet-20241022": {
                     "provider": "Anthropic",
-                    "description": "Claude 3.5 Sonnet - Excellent for complex reasoning and translation",
+                    "description": "Claude 3.5 Sonnet (2024-10-22)",
                     "capabilities": ["text", "reasoning", "translation"],
                     "context_window": 200000
                 },
-                "claude-haiku": {
+                "claude-3-7-sonnet-20250219": {
+                    "provider": "Anthropic",
+                    "description": "Claude 3.7 Sonnet (2025-02-19)",
+                    "capabilities": ["text", "reasoning", "translation"],
+                    "context_window": 200000
+                },
+                "claude-sonnet-4-20250514": {
+                    "provider": "Anthropic",
+                    "description": "Claude Sonnet 4.0 (2025-05-14)",
+                    "capabilities": ["text", "reasoning", "translation"],
+                    "context_window": 200000
+                },
+                "claude-3-5-haiku-20241022": {
                     "provider": "Anthropic", 
-                    "description": "Claude 3.5 Haiku - Fast and efficient for simpler tasks",
+                    "description": "Claude 3.5 Haiku (2024-10-22)",
                     "capabilities": ["text", "translation"],
                     "context_window": 200000
                 },
-                "claude-opus": {
+                "claude-3-opus-20240229": {
                     "provider": "Anthropic",
-                    "description": "Claude 3 Opus - Most capable for complex tasks",
+                    "description": "Claude 3 Opus (2024-02-29)",
                     "capabilities": ["text", "reasoning", "translation"],
                     "context_window": 200000
                 }
@@ -175,16 +222,27 @@ class ModelRouter:
         
         if self.settings.gemini_api_key:
             available.update({
-                "gemini-pro": {
+                "gemini-2.5-pro": {
                     "provider": "Google",
-                    "description": "Gemini Pro - Good for text and reasoning tasks",
+                    "description": "Gemini 2.5 Pro - Default thinking enabled (budget -1)",
+                    "capabilities": ["text", "reasoning", "translation"],
+                    "context_window": 30720
+                },
+                "gemini-2.5-flash-thinking": {
+                    "provider": "Google",
+                    "description": "Virtual: Gemini 2.5 Flash with thinking (budget -1)",
+                    "capabilities": ["text", "reasoning", "translation"],
+                    "context_window": 30720
+                },
+                "gemini-2.5-flash": {
+                    "provider": "Google",
+                    "description": "Gemini 2.5 Flash - Fast (no thinking; budget 0)",
                     "capabilities": ["text", "reasoning", "translation"],
                     "context_window": 30720
                 }
             })
-        
         return available
-    
+
     def validate_model_availability(self, model_name: str) -> bool:
         """
         Check if a model is available based on API key configuration.
@@ -197,6 +255,45 @@ class ModelRouter:
         """
         available_models = self.get_available_models()
         return model_name.lower() in available_models
+
+class _GeminiModelWrapper:
+    """Thin wrapper to inject generation_config into all Gemini model calls by default.
+
+    This preserves the same interface used in the codebase (invoke, ainvoke, abatch, with_structured_output).
+    Per-call generation_config can override the default by passing it explicitly.
+    """
+
+    def __init__(self, base_model: BaseChatModel, generation_config: dict):
+        self._base_model = base_model
+        self._generation_config = generation_config or {}
+        # Structured runs (function-calling) cannot combine with response_mime_type=json
+        self._structured_generation_config = {
+            k: v for k, v in self._generation_config.items() if k != "response_mime_type"
+        }
+
+    # Fallback for any attributes/methods not overridden
+    def __getattr__(self, item):
+        return getattr(self._base_model, item)
+
+    def invoke(self, input, **kwargs):
+        if "generation_config" not in kwargs:
+            kwargs["generation_config"] = self._generation_config
+        return self._base_model.invoke(input, **kwargs)
+
+    async def ainvoke(self, input, **kwargs):
+        if "generation_config" not in kwargs:
+            kwargs["generation_config"] = self._generation_config
+        return await self._base_model.ainvoke(input, **kwargs)
+
+    async def abatch(self, inputs, **kwargs):
+        if "generation_config" not in kwargs:
+            kwargs["generation_config"] = self._generation_config
+        return await self._base_model.abatch(inputs, **kwargs)
+
+    def with_structured_output(self, schema):
+        structured = self._base_model.with_structured_output(schema)
+        # Use a config compatible with function-calling (no response_mime_type)
+        return _GeminiModelWrapper(structured, self._structured_generation_config)
 
 
 # Global model router instance

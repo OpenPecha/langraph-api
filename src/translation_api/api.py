@@ -1,11 +1,13 @@
 """FastAPI application for Tibetan Buddhist text translation."""
 
 import asyncio
+import json
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -31,6 +33,29 @@ from .models.standardization import (
     StandardizationInputItem
 )
 from .prompts.tibetan_buddhist import RETRANSLATION_PROMPT, GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT
+from .models.pipeline import PipelineRequest, PipelineResponse
+from .models.ucca import (
+    UCCARequest,
+    UCCAResponse,
+    UCCABatchRequest,
+    UCCABatchItemResult,
+)
+from .workflows.ucca import generate_ucca_graph, stream_ucca_generation
+from .models.gloss import (
+    GlossRequest,
+    GlossResponse,
+    GlossBatchRequest,
+    GlossBatchItemResult,
+)
+from .workflows.gloss import generate_gloss, stream_gloss_generation
+from .models.workflow import (
+    WorkflowInput,
+    WorkflowResponse,
+    WorkflowLLMResult,
+    WorkflowRunRequest,
+    WorkflowBatchRequest,
+    WorkflowBatchItemResult,
+)
 
 # Import from root level graph module
 import sys
@@ -82,26 +107,29 @@ async def lifespan(app: FastAPI):
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Buddhist Text Translation API",
+    title="Lang-Graph Translation and UCCA API",
     description="""
-A specialized, multi-stage API for translating Tibetan Buddhist texts. The workflow is designed to be modular:
+An advanced API for translating Buddhist texts using a configurable, streaming-first pipeline.
+It supports multi-stage processing including translation, glossary extraction, and terminology standardization.
+It also provides endpoints for generating UCCA (Universal Conceptual Cognitive Annotation) graphs from text.
 
-### 1. Translation
-- Use the `/translate` or `/translate/stream` endpoints to get high-quality translations for your source texts.
-
-### 2. Glossary Extraction
-- After translating, send the results to the `/glossary/extract` or `/glossary/extract/stream` endpoints to generate a detailed glossary of key terms.
-
-### 3. Standardization
-- Use the `/standardize/analyze` endpoint to identify inconsistencies in your translations.
-- Use the `/standardize/apply` or `/standardize/apply/stream` endpoints to enforce a consistent terminology across all your translations.
-
-### Additional Features:
-- **Multiple AI Models**: Supports various models from Anthropic, OpenAI, and Google.
-- **Intelligent Caching**: In-memory cache for translations and glossaries to boost performance.
-- **Custom Rules**: Allows users to provide custom translation instructions.
+**Key Features:**
+- Real-time streaming of results via Server-Sent Events (SSE).
+- Batch processing capabilities.
+- Configurable language models (e.g., Claude, Gemini).
+- UCCA graph generation with optional commentaries.
+- Cache management for improved performance.
     """,
-    version="2.0.0",
+    version="1.1.0",
+    contact={
+        "name": "API Support",
+        "url": "http://example.com/contact",
+        "email": "support@example.com",
+    },
+    license_info={
+        "name": "Apache 2.0",
+        "url": "https://www.apache.org/licenses/LICENSE-2.0.html",
+    },
     lifespan=lifespan
 )
 
@@ -137,17 +165,16 @@ async def health_check():
     )
 
 
-@app.post("/system/clear-cache", tags=["System"])
+@app.post("/system/clear-cache", tags=["System"], summary="Clear Server-Side Cache")
 async def clear_cache():
     """
-    Clear the in-memory cache for translations and glossaries.
-    
-    This is useful for ensuring fresh results from the language model,
-    especially after changing a model or prompt.
+    Clears the server-side cache for all memoized functions. This is useful
+    when you want to ensure you are getting fresh results from the language models,
+    bypassing any previously cached translations or analyses.
     """
     cache = get_cache()
-    cache.clear_all()
-    return {"status": "success", "message": "Cache cleared."}
+    cleared_count = cache.clear()
+    return {"status": "cache_cleared", "cleared_items": cleared_count}
 
 
 @app.post(
@@ -704,9 +731,167 @@ async def stream_apply_standardization(request: StandardizationRequest):
     )
 
 
+@app.post("/pipeline/run", response_model=PipelineResponse, tags=["Pipeline"])
+async def run_pipeline(request: PipelineRequest) -> PipelineResponse:
+    """Run a customizable workflow by selecting stages and providing inputs.
+
+    Stages (in order):
+    - translate: uses existing translation workflow
+    - extract_glossary: runs glossary extraction on results/items
+    - analyze: runs standardization analysis
+    - apply_standardization: applies standardization pairs with minimal-change retranslation
+    """
+    aggregate: PipelineResponse = PipelineResponse(metadata={"stages": request.stages})
+
+    # Stage: translate
+    if "translate" in request.stages:
+        if not request.texts or not request.target_language:
+            raise HTTPException(status_code=400, detail="texts and target_language are required for translate stage")
+        workflow_request = TranslationRequest(
+            texts=request.texts,
+            target_language=request.target_language,
+            model_name=request.model_name,
+            text_type=request.text_type,
+            batch_size=request.batch_size,
+            model_params=request.model_params,
+            user_rules=request.user_rules,
+        )
+        final_state = await run_translation_workflow(workflow_request)
+        aggregate.results = final_state["final_results"]
+        aggregate.metadata.update({"translation": final_state.get("metadata", {})})
+
+    # Build items for downstream stages
+    items_source = request.items
+    if aggregate.results:
+        # Convert TranslationResult list into StandardizationInputItem-like dicts
+        items_source = [
+            {
+                "original_text": r.original_text,  # type: ignore[attr-defined]
+                "translated_text": r.translated_text,  # type: ignore[attr-defined]
+                "glossary": getattr(r, "glossary", []),
+            }
+            for r in aggregate.results
+        ]
+
+    # Stage: extract_glossary
+    if "extract_glossary" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for glossary extraction")
+        glossary_req = GlossaryExtractionRequest(items=items_source, model_name=request.model_name, batch_size=request.batch_size)  # type: ignore[arg-type]
+        aggregate.glossary = await extract_glossary(glossary_req)  # reuse handler logic
+
+    # Stage: analyze
+    if "analyze" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for analysis")
+        # If we have a new glossary, enrich items with glossary terms
+        if aggregate.glossary:
+            enriched = []
+            for item in items_source:
+                terms = [t for t in aggregate.glossary.terms if (t.source_term in item["original_text"] or t.translated_term in item["translated_text"]) ]
+                enriched.append({**item, "glossary": terms})
+            items_source = enriched
+        analysis_req = AnalysisRequest(items=items_source)  # type: ignore[arg-type]
+        analysis_resp = await analyze_consistency(analysis_req)
+        aggregate.inconsistent_terms = analysis_resp.inconsistent_terms
+
+    # Stage: apply_standardization
+    if "apply_standardization" in request.stages:
+        if not items_source:
+            raise HTTPException(status_code=400, detail="No items available for standardization")
+        if not request.standardization_pairs:
+            raise HTTPException(status_code=400, detail="standardization_pairs is required for apply_standardization stage")
+        std_req = StandardizationRequest(
+            items=items_source,  # type: ignore[arg-type]
+            standardization_pairs=request.standardization_pairs,
+            model_name=request.model_name,
+            user_rules=request.user_rules,
+        )
+        std_resp = await apply_standardization(std_req)
+        aggregate.updated_items = std_resp.updated_items
+
+    return aggregate
+
+
 def create_app() -> FastAPI:
     """Factory function to create the FastAPI app."""
     return app
+# --- Dharmamitra Proxy Endpoints ---
+
+class DharmamitraKnnRequest(BaseModel):
+    query: str
+    language: str
+    password: Optional[str] = None
+    do_grammar: Optional[bool] = False  # Ignored; always forced False
+
+
+@app.post("/dharmamitra/knn-translate-mitra", tags=["Dharmamitra"], summary="Proxy: KNN Translate Mitra (Streaming)")
+async def dharmamitra_knn_translate_mitra(request: DharmamitraKnnRequest):
+    """Proxy to Dharmamitra KNN Translate Mitra SSE endpoint.
+
+    Upstreams to https://dharmamitra.org/api-search/knn-translate-mitra/
+    Returns text/event-stream forwarding 'data:' chunks.
+    """
+    url = "https://dharmamitra.org/api-search/knn-translate-mitra/"
+    pwd = get_settings().dharmamitra_password or request.password
+    if not pwd:
+        raise HTTPException(status_code=400, detail="DHARMAMITRA_PASSWORD not set and no password provided")
+
+    async def event_stream():
+        async with httpx.AsyncClient(timeout=None) as client:
+            resp = await client.post(url, json={
+                "query": request.query,
+                "language": (request.language or "").lower(),
+                "password": pwd,
+                "do_grammar": False,
+            })
+            # Dharmamitra returns SSE in the body as text; forward lines with data:
+            text = resp.text
+            # Normalize CRLF
+            buf = text.replace("\r\n", "\n")
+            for line in buf.split("\n"):
+                if line.startswith("data: "):
+                    yield f"data: {line[6:].strip()}\n\n"
+
+    return EventSourceResponse(event_stream(), media_type="text/event-stream")
+
+
+class DharmamitraGeminiRequest(BaseModel):
+    query: str
+    language: str
+    password: Optional[str] = None
+    do_grammar: Optional[bool] = None  # Ignored; forced False
+    use_pro_model: Optional[bool] = False  # Ignored; forced False
+
+
+@app.post("/dharmamitra/knn-translate-gemini-no-stream", tags=["Dharmamitra"], summary="Proxy: KNN Translate Gemini (Non-stream)")
+async def dharmamitra_knn_translate_gemini(request: DharmamitraGeminiRequest):
+    """Proxy to Dharmamitra Gemini non-stream endpoint.
+
+    Upstreams to https://dharmamitra.org/api-search/knn-translate-gemini-no-stream1/
+    """
+    url = "https://dharmamitra.org/api-search/knn-translate-gemini-no-stream1/"
+    pwd = get_settings().dharmamitra_password or request.password
+    if not pwd:
+        raise HTTPException(status_code=400, detail="DHARMAMITRA_PASSWORD not set and no password provided")
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            payload = {
+                "query": request.query,
+                "language": (request.language or "").lower(),
+                "password": pwd,
+                "do_grammar": False,
+                "use_pro_model": False,
+            }
+
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data
+    except httpx.HTTPStatusError as he:
+        raise HTTPException(status_code=he.response.status_code, detail=he.response.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Dharmamitra Gemini proxy failed: {str(e)}")
 
 
 if __name__ == "__main__":
@@ -716,3 +901,413 @@ if __name__ == "__main__":
         port=settings.api_port,
         reload=True
     )
+
+
+# --- UCCA Endpoints ---
+
+class UCCAErrorResponse(BaseModel):
+    error: str
+
+
+@app.post("/ucca/generate", response_model=UCCAResponse, tags=["UCCA"], summary="Generate a Single UCCA Graph", responses={
+    200: {"description": "Generated UCCA graph"},
+    400: {"description": "Invalid model name"},
+    500: {"description": "UCCA generation failed", "model": UCCAErrorResponse},
+})
+async def ucca_generate(request: UCCARequest) -> UCCAResponse:
+    """
+    Generates a UCCA (Universal Conceptual Cognitive Annotation) graph for a single input text.
+
+    This endpoint invokes a language model with a specialized prompt to parse the text
+    and return a structured UCCA graph. Optional commentaries can be provided for context.
+    """
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+        raw_json, graph = generate_ucca_graph(
+            model,
+            request.input_text,
+            commentary_1=request.commentary_1,
+            commentary_2=request.commentary_2,
+            commentary_3=request.commentary_3,
+            sanskrit_text=request.sanskrit_text,
+        )
+        return UCCAResponse(ucca_graph=graph, raw_json=raw_json)
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        return UCCAResponse(error=f"Failed to parse LLM output as JSON: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"UCCA generation failed: {str(e)}")
+
+
+@app.post("/ucca/generate/batch", response_model=list[UCCABatchItemResult], tags=["UCCA"], summary="Generate UCCA Graphs in Batch")
+async def ucca_generate_batch(request: UCCABatchRequest) -> list[UCCABatchItemResult]:
+    """
+    Generates UCCA graphs for a batch of input texts.
+
+    This endpoint processes multiple texts in parallel (up to the specified `batch_size`)
+    and returns a list of results once all items have been processed.
+    """
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+
+        results: list[UCCABatchItemResult] = []
+        for idx, item in enumerate(request.items):
+            try:
+                _, graph = generate_ucca_graph(
+                    model,
+                    item.input_text,
+                    commentary_1=item.commentary_1,
+                    commentary_2=item.commentary_2,
+                    commentary_3=item.commentary_3,
+                    sanskrit_text=item.sanskrit_text,
+                )
+                results.append(UCCABatchItemResult(index=idx, ucca_graph=graph))
+            except Exception as e:
+                results.append(UCCABatchItemResult(index=idx, error=str(e)))
+
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch UCCA generation failed: {str(e)}")
+
+
+@app.post("/ucca/generate/stream", tags=["UCCA"], summary="Generate UCCA Graphs via SSE Stream")
+async def ucca_generate_stream(request: UCCABatchRequest):
+    """
+    Generates UCCA graphs for a batch of input texts and streams the results via SSE.
+
+    This is the recommended endpoint for generating UCCA for multiple items in an interactive
+    application. It provides real-time feedback as each item is processed and sends
+    a final completion event with all results.
+    """
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+        # Convert Pydantic items to dict for the streamer
+        items = [
+            {
+                "input_text": it.input_text,
+                "commentary_1": it.commentary_1,
+                "commentary_2": it.commentary_2,
+                "commentary_3": it.commentary_3,
+                "sanskrit_text": it.sanskrit_text,
+            }
+            for it in request.items
+        ]
+
+        return EventSourceResponse(
+            stream_ucca_generation(model, items, batch_size=request.batch_size),
+            media_type="text/event-stream",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Streaming UCCA generation failed: {str(e)}")
+
+
+# --- Gloss Endpoints ---
+
+@app.post("/gloss/generate", response_model=GlossResponse, tags=["Gloss"], summary="Generate Gloss for a Single Text")
+async def gloss_generate(request: GlossRequest) -> GlossResponse:
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+        raw, data = generate_gloss(
+            model,
+            request.input_text,
+            ucca_interpretation=request.ucca_interpretation,
+            commentary_1=request.commentary_1,
+            commentary_2=request.commentary_2,
+            commentary_3=request.commentary_3,
+            sanskrit_text=request.sanskrit_text,
+        )
+
+        std_text = data.get("StandardizedText", {}).get("standardized_text")
+        note = data.get("StandardizedText", {}).get("note")
+        analysis = json.dumps(data.get("analysis", []), ensure_ascii=False)
+        glossary = data.get("Glossary", {}).get("glossary")
+        return GlossResponse(standardized_text=std_text, note=note, analysis=analysis, glossary=glossary, raw_output=raw)
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        return GlossResponse(error=f"Failed to parse LLM output as JSON: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gloss generation failed: {str(e)}")
+
+
+@app.post("/gloss/generate/batch", response_model=list[GlossBatchItemResult], tags=["Gloss"], summary="Generate Gloss in Batch")
+async def gloss_generate_batch(request: GlossBatchRequest) -> list[GlossBatchItemResult]:
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+        results: list[GlossBatchItemResult] = []
+        for idx, item in enumerate(request.items):
+            try:
+                _, data = generate_gloss(
+                    model,
+                    item.input_text,
+                    ucca_interpretation=item.ucca_interpretation,
+                    commentary_1=item.commentary_1,
+                    commentary_2=item.commentary_2,
+                    commentary_3=item.commentary_3,
+                    sanskrit_text=item.sanskrit_text,
+                )
+                results.append(GlossBatchItemResult(
+                    index=idx,
+                    standardized_text=data.get("StandardizedText", {}).get("standardized_text"),
+                    note=data.get("StandardizedText", {}).get("note"),
+                    analysis=json.dumps(data.get("analysis", []), ensure_ascii=False),
+                    glossary=data.get("Glossary", {}).get("glossary"),
+                ))
+            except Exception as e:
+                results.append(GlossBatchItemResult(index=idx, error=str(e)))
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Batch gloss generation failed: {str(e)}")
+
+
+@app.post("/gloss/generate/stream", tags=["Gloss"], summary="Generate Gloss via SSE Stream")
+async def gloss_generate_stream(request: GlossBatchRequest):
+    try:
+        model_router = get_model_router()
+        if not model_router.validate_model_availability(request.model_name):
+            available_models = list(model_router.get_available_models().keys())
+            raise HTTPException(status_code=400, detail=f"Model '{request.model_name}' is not available. Available models: {available_models}")
+
+        model = model_router.get_model(request.model_name, **request.model_params)
+        items = [
+            {
+                "input_text": it.input_text,
+                "ucca_interpretation": it.ucca_interpretation,
+                "commentary_1": it.commentary_1,
+                "commentary_2": it.commentary_2,
+                "commentary_3": it.commentary_3,
+                "sanskrit_text": it.sanskrit_text,
+            }
+            for it in request.items
+        ]
+        return EventSourceResponse(stream_gloss_generation(model, items, batch_size=request.batch_size), media_type="text/event-stream")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Streaming gloss generation failed: {str(e)}")
+
+
+# --- Workflow Endpoint (Echo-based, prompt selection by combo key) ---
+
+def _canonicalize_combo_key(combo_key: str) -> str:
+    """Make combo_key order-independent by sorting tokens.
+
+    Recognized tokens: source, ucca, gloss, sanskrit, commentariesK (K in {0,1,2,3,>3}).
+    Any unknown tokens are preserved and sorted as well.
+    """
+    tokens = [t for t in combo_key.strip().split("+") if t]
+    # Normalize 'commentaries' tokens to a count bucket if present
+    normalized = []
+    for t in tokens:
+        if t.startswith("commentaries"):
+            normalized.append(t)
+        else:
+            normalized.append(t)
+    # Always include 'source' by default
+    if "source" not in normalized:
+        normalized.append("source")
+    # Ensure unique and sorted
+    normalized = sorted(set(normalized))
+    return "+".join(normalized)
+
+
+def _derive_commentaries_token(comments: list[str] | None) -> str | None:
+    if comments is None:
+        return None
+    n = len(comments)
+    if n > 3:
+        return "commentaries>3"
+    return f"commentaries{n}"
+
+
+@app.post("/workflow/run", response_model=WorkflowResponse, tags=["Workflow"], summary="Run workflow by combo key")
+async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
+    """Echo-based workflow runner.
+
+    - Selects prompt based on the provided path combo_key (order-independent).
+    - Canonicalizes the provided combo_key regardless of which inputs are present.
+    - Returns the inputs for UI testing.
+    """
+    inputs = request.input
+    combo_key = request.combo_key
+    model_name = request.model_name or "claude-3-7-sonnet-20250219"
+
+    if not inputs.source:
+        raise HTTPException(status_code=400, detail="'source' is required")
+
+    provided_key = _canonicalize_combo_key(combo_key)
+
+    # Always prefer the provided path key for prompt selection (order-independent)
+    final_key = provided_key
+
+    # Validate presence and bounds based on tokens
+    tokens = set(final_key.split('+'))
+    # commentaries length validation
+    if inputs.commentaries is not None and len(inputs.commentaries) > 3:
+        raise HTTPException(status_code=400, detail="At most 3 commentaries are allowed")
+    # If combo specifies commentariesK where K>0, ensure provided
+    requires_commentaries = any(t.startswith('commentaries') and t not in ['commentaries0'] for t in tokens)
+    if requires_commentaries and (not inputs.commentaries or len(inputs.commentaries) == 0):
+        raise HTTPException(status_code=400, detail="This combination requires commentaries, but none were provided")
+    # If combo includes ucca/gloss/sanskrit ensure corresponding input present
+    if 'ucca' in tokens and inputs.ucca is None:
+        raise HTTPException(status_code=400, detail="Combo includes 'ucca' but no UCCA JSON was provided")
+    if 'gloss' in tokens and inputs.gloss is None:
+        raise HTTPException(status_code=400, detail="Combo includes 'gloss' but no Gloss JSON was provided")
+    if 'sanskrit' in tokens and not inputs.sanskrit:
+        raise HTTPException(status_code=400, detail="Combo includes 'sanskrit' but no Sanskrit text was provided")
+
+    # Build translation instructions: no additions beyond source; obey target language if provided
+    target_line = f"Translate into {inputs.target_language}." if inputs.target_language else "Translate into the requested target language."
+    guidelines: list[str] = [
+        target_line,
+        "Do not add content beyond the source. No examples, adaptations, or expansions.",
+        "Preserve meaning, nuance, and accuracy; avoid extraneous explanation.",
+    ]
+    if 'ucca' in tokens:
+        guidelines.append("Use the UCCA structure to disambiguate roles, participants, and processes; do not include UCCA in the output.")
+    if 'gloss' in tokens:
+        guidelines.append("Use Gloss to prefer standardized term choices and respect any provided notes.")
+    if inputs.commentaries and len(inputs.commentaries) > 0:
+        guidelines.append("Leverage commentaries to resolve ambiguity; do not quote or cite them explicitly.")
+    if 'sanskrit' in tokens:
+        guidelines.append("Use Sanskrit to validate terms and transliterations where applicable; do not add Sanskrit unless necessary.")
+    # No output structure restriction; return plain text translation only.
+
+    prompt_text = "\n- " + "\n- ".join(guidelines)
+
+    # Invoke LLM with a default generic prompt using the selected model
+    model_router = get_model_router()
+    if not model_router.validate_model_availability(model_name):
+        available_models = list(model_router.get_available_models().keys())
+        raise HTTPException(status_code=400, detail=f"Model '{model_name}' is not available. Available models: {available_models}")
+
+    # Build a simple combined prompt with inputs for a generic echo/summary
+    def block(title: str, body: str) -> str:
+        return f"\n\n### {title}\n{body.strip()}" if body else ""
+
+    # Render inputs sections
+    commentary_text = "\n\n".join((inputs.commentaries or [])[:3]) if inputs.commentaries else ""
+    # Formatted commentaries block for {commentaries}/{commenteries} placeholder
+    commentaries_block = ""
+    if inputs.commentaries:
+        lines: list[str] = []
+        for idx, c in enumerate(inputs.commentaries[:3]):
+            c_str = (c or "").strip()
+            if c_str:
+                lines.append(f"commentary {idx+1}: {c_str}")
+        commentaries_block = "\n".join(lines)
+    ucca_text = json.dumps(inputs.ucca, ensure_ascii=False, indent=2) if isinstance(inputs.ucca, dict) else (inputs.ucca or "")
+    gloss_text = json.dumps(inputs.gloss, ensure_ascii=False, indent=2) if isinstance(inputs.gloss, dict) else (inputs.gloss or "")
+    sanskrit_text = inputs.sanskrit or ""
+
+    # Support custom prompt if provided. It must include {source}; other placeholders optional.
+    if request.custom_prompt:
+        tmpl = request.custom_prompt
+        if "{source}" not in tmpl:
+            raise HTTPException(status_code=400, detail="custom_prompt must include {source}")
+        # Build substitution map
+        subs = {
+            "source": inputs.source,
+            "ucca": ucca_text,
+            "gloss": gloss_text,
+            "commentary1": (inputs.commentaries[0] if inputs.commentaries and len(inputs.commentaries) > 0 else ""),
+            "commentary2": (inputs.commentaries[1] if inputs.commentaries and len(inputs.commentaries) > 1 else ""),
+            "commentary3": (inputs.commentaries[2] if inputs.commentaries and len(inputs.commentaries) > 2 else ""),
+            # Support a single block placeholder for all commentaries
+            "commentaries": commentaries_block,
+            # Common misspelling alias
+            "commenteries": commentaries_block,
+            "sanskrit": sanskrit_text,
+        }
+        try:
+            combined_prompt = tmpl.format(**subs)
+        except KeyError as ke:
+            raise HTTPException(status_code=400, detail=f"Unknown placeholder in custom_prompt: {str(ke)}")
+    else:
+        combined_prompt = (
+            f"You are a professional translator for Buddhist literature.\n"
+            + block("Instructions", "\n- " + "\n- ".join(guidelines))
+            + block("Source", inputs.source)
+            + block("Commentaries (up to 3)", commentary_text)
+            + block("UCCA", ucca_text)
+            + block("Gloss", gloss_text)
+            + block("Sanskrit", sanskrit_text)
+            + "\n\nReturn only the translated text with no additional commentary."
+        )
+
+    llm_output: str = ""
+    translation_text: str | None = None
+    try:
+        model = model_router.get_model(model_name, **(request.model_params or {}))
+        # Single plain-text response; no structured schema
+        resp = await model.ainvoke(combined_prompt)
+        llm_output = getattr(resp, "content", str(resp)) or ""
+        if isinstance(llm_output, list):
+            try:
+                llm_output = "\n".join([str(p) for p in llm_output])
+            except Exception:
+                llm_output = str(llm_output)
+        translation_text = llm_output
+    except Exception as e:
+        # Return the error inside the payload for easier UI debugging instead of failing the request entirely
+        llm_output = f"LLM invocation error: {str(e)}"
+        translation_text = None
+
+    return WorkflowResponse(
+        combo_key=final_key,
+        translation=translation_text,
+    )
+
+
+@app.post("/workflow/run/batch", response_model=list[WorkflowBatchItemResult], tags=["Workflow"], summary="Run workflow in batch")
+async def workflow_run_batch(request: WorkflowBatchRequest) -> list[WorkflowBatchItemResult]:
+    # Reuse the single-run logic in a loop
+    results: list[WorkflowBatchItemResult] = []
+    for idx, item in enumerate(request.items):
+        try:
+            single = WorkflowRunRequest(
+                combo_key=request.combo_key,
+                input=item,
+                model_name=request.model_name,
+                model_params=request.model_params,
+            )
+            resp = await workflow_run(single)
+            results.append(WorkflowBatchItemResult(index=idx, translation=resp.translation))
+        except HTTPException as he:
+            results.append(WorkflowBatchItemResult(index=idx, error=str(he.detail)))
+        except Exception as e:
+            results.append(WorkflowBatchItemResult(index=idx, error=str(e)))
+    return results
