@@ -82,7 +82,7 @@ For a deep dive into the architecture, the key technical decisions, and the proj
     OPENAI_API_KEY="your-openai-key"
     GEMINI_API_KEY="your-google-key"
     # Optional: Dharmamitra upstream password used by proxy endpoints if request omits it
-    DHARMAMITRA_PASSWORD="sthiramati"
+
     ```
 
 #### 3. Run the Server
