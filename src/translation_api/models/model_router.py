@@ -135,7 +135,7 @@ class ModelRouter:
 
         # Determine desired max_output_tokens (prefer generation_config override)
         user_gc = kwargs.get("generation_config") or {}
-        max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 32000))
+        max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 16000))
 
         base_model = ChatGoogleGenerativeAI(
             google_api_key=self.settings.gemini_api_key,
@@ -145,18 +145,21 @@ class ModelRouter:
             **{k: v for k, v in kwargs.items() if k not in ["temperature", "max_tokens"]}
         )
         # Default generation_config with thinking control per model variant
-        # Baseline: bias JSON for non-structured calls and lift output cap
+        # Baseline: prefer JSON for non-structured calls and set output cap
         base_gc = {"response_mime_type": "application/json", "max_output_tokens": max_out, **user_gc}
         # Thinking budget logic
         if model_name == "gemini-2.5-flash":
             # Plain flash: no thinking
             thinking_gc = {"thinking_config": {"thinking_budget": 0}}
         elif model_name == "gemini-2.5-flash-thinking":
-            # Virtual model: flash with thinking
-            thinking_gc = {"thinking_config": {"thinking_budget": -1}}
+            # Virtual model: flash with thinking (12k budget)
+            thinking_gc = {"thinking_config": {"thinking_budget": 12000}}
+        elif model_name in ["gemini-2.5-pro", "gemini-pro", "gemini-pro-vision"]:
+            # Pro variants: enable thinking with 12k budget
+            thinking_gc = {"thinking_config": {"thinking_budget": 12000}}
         else:
-            # Other Gemini variants default to with thinking
-            thinking_gc = {"thinking_config": {"thinking_budget": -1}}
+            # Default: enable thinking with 12k budget
+            thinking_gc = {"thinking_config": {"thinking_budget": 12000}}
 
         default_generation_config = {**base_gc, **thinking_gc}
         return _GeminiModelWrapper(base_model, default_generation_config)
@@ -276,18 +279,35 @@ class _GeminiModelWrapper:
         return getattr(self._base_model, item)
 
     def invoke(self, input, **kwargs):
-        if "generation_config" not in kwargs:
-            kwargs["generation_config"] = self._generation_config
+        # Allow callers to explicitly disable JSON MIME (plain text)
+        gc = kwargs.get("generation_config") or {}
+        if gc is None:
+            gc = {}
+        merged = {**self._generation_config, **gc}
+        # If caller asked for plain text, remove JSON MIME
+        if merged.get("response_mime_type") == "text/plain":
+            merged.pop("response_mime_type", None)
+        kwargs["generation_config"] = merged
         return self._base_model.invoke(input, **kwargs)
 
     async def ainvoke(self, input, **kwargs):
-        if "generation_config" not in kwargs:
-            kwargs["generation_config"] = self._generation_config
+        gc = kwargs.get("generation_config") or {}
+        if gc is None:
+            gc = {}
+        merged = {**self._generation_config, **gc}
+        if merged.get("response_mime_type") == "text/plain":
+            merged.pop("response_mime_type", None)
+        kwargs["generation_config"] = merged
         return await self._base_model.ainvoke(input, **kwargs)
 
     async def abatch(self, inputs, **kwargs):
-        if "generation_config" not in kwargs:
-            kwargs["generation_config"] = self._generation_config
+        gc = kwargs.get("generation_config") or {}
+        if gc is None:
+            gc = {}
+        merged = {**self._generation_config, **gc}
+        if merged.get("response_mime_type") == "text/plain":
+            merged.pop("response_mime_type", None)
+        kwargs["generation_config"] = merged
         return await self._base_model.abatch(inputs, **kwargs)
 
     def with_structured_output(self, schema):

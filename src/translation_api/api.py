@@ -1273,7 +1273,10 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
     try:
         model = model_router.get_model(model_name, **(request.model_params or {}))
         # Single plain-text response; no structured schema
-        resp = await model.ainvoke(combined_prompt)
+        resp = await model.ainvoke(
+            combined_prompt,
+            generation_config={"response_mime_type": "text/plain"}
+        )
         llm_output = getattr(resp, "content", str(resp)) or ""
         if isinstance(llm_output, list):
             try:
