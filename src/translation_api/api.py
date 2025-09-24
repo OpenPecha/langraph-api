@@ -1251,11 +1251,22 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
             # Common misspelling alias
             "commenteries": commentaries_block,
             "sanskrit": sanskrit_text,
+            "target_language": (inputs.target_language or "").strip(),
         }
-        try:
-            combined_prompt = tmpl.format(**subs)
-        except KeyError as ke:
-            raise HTTPException(status_code=400, detail=f"Unknown placeholder in custom_prompt: {str(ke)}")
+        # Protect allowed placeholders, escape all other braces, then restore
+        allowed_placeholders = [
+            "source","ucca","gloss","commentary1","commentary2","commentary3","commentaries","commenteries","sanskrit","target_language"
+        ]
+        sentinel_map = {name: f"<<PH_{name.upper()}>>" for name in allowed_placeholders}
+        protected = tmpl
+        for name, token in sentinel_map.items():
+            protected = protected.replace(f"{{{name}}}", token)
+        # Escape any remaining single braces to avoid format errors
+        protected = protected.replace("{", "{{").replace("}", "}}")
+        # Restore placeholders
+        for name, token in sentinel_map.items():
+            protected = protected.replace(token, f"{{{name}}}")
+        combined_prompt = protected.format(**subs)
     else:
         combined_prompt = (
             f"You are a professional translator for Buddhist literature.\n"
