@@ -319,11 +319,9 @@ async def stream_gloss_generation(
                 analysis = json.dumps(data.get("analysis", []), ensure_ascii=False)
                 glossary = data.get("Glossary", {}).get("glossary")
 
+                # Only return the glossary outward per requirement
                 item_payload = {
                     "index": idx,
-                    "standardized_text": std_text,
-                    "note": note,
-                    "analysis": analysis,
                     "glossary": glossary,
                 }
                 aggregated.append(item_payload)
