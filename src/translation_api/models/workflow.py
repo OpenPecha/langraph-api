@@ -42,6 +42,13 @@ class WorkflowRunRequest(BaseModel):
     input: WorkflowInput = Field(..., description="Single workflow input")
     model_name: Optional[str] = Field(None, description="Model to use; overrides input.model if provided")
     model_params: Dict[str, Any] = Field(default_factory=dict)
+<<<<<<< HEAD
+=======
+    api: Optional[str] = Field(
+        default=None,
+        description="Optional custom base API endpoint for the selected model (Claude/Gemini)."
+    )
+>>>>>>> 258f501 (Enhance API key handling in ModelRouter)
     custom_prompt: Optional[str] = Field(
         default=None,
         description=(

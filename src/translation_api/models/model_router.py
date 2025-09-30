@@ -96,14 +96,17 @@ class ModelRouter:
     
     def _create_anthropic_model(self, model_name: str, default_configs: dict, **kwargs) -> ChatAnthropic:
         """Create an Anthropic (Claude) model instance."""
-        if not self.settings.anthropic_api_key:
+        # Allow per-call API key override via kwargs['api_key']
+        user_api_key = kwargs.pop("api_key", None)
+        api_key = user_api_key or self.settings.anthropic_api_key
+        if not api_key:
             raise ValueError("ANTHROPIC_API_KEY is required for Claude models")
 
         # Expect exact Anthropic model IDs passed through
         model_id = model_name
 
         return ChatAnthropic(
-            anthropic_api_key=self.settings.anthropic_api_key,
+            anthropic_api_key=api_key,
             model=model_id,
             temperature=default_configs["temperature"],
             max_tokens=default_configs["max_tokens"],
@@ -125,9 +128,13 @@ class ModelRouter:
     
     def _create_gemini_model(self, model_name: str, default_configs: dict, **kwargs) -> ChatGoogleGenerativeAI:
         """Create a Google Gemini model instance."""
-        if not self.settings.gemini_api_key:
+        # Allow per-call API key override via kwargs['api_key']
+        user_api_key = kwargs.pop("api_key", None)
+        api_key = user_api_key or self.settings.gemini_api_key
+        if not api_key:
             raise ValueError("GEMINI_API_KEY is required for Gemini models")
         
+<<<<<<< HEAD
         provider_model_name = model_name
         if model_name == "gemini-2.5-flash-thinking":
             # Alias to the actual provider model id
@@ -140,6 +147,27 @@ class ModelRouter:
         base_model = ChatGoogleGenerativeAI(
             google_api_key=self.settings.gemini_api_key,
             model=provider_model_name,
+=======
+<<<<<<< Updated upstream
+        return ChatGoogleGenerativeAI(
+            google_api_key=self.settings.gemini_api_key,
+            model=model_name,
+=======
+        provider_model_name = model_name
+        if model_name == "gemini-2.5-flash-thinking":
+            # Alias to the actual provider model id
+            provider_model_name = "gemini-2.5-flash"
+
+        # Determine desired max_output_tokens (prefer generation_config override)
+        user_gc = kwargs.get("generation_config") or {}
+        max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 16000))
+
+        # Optional custom API endpoint
+        base_model = ChatGoogleGenerativeAI(
+            google_api_key=api_key,
+            model=provider_model_name,
+>>>>>>> Stashed changes
+>>>>>>> 258f501 (Enhance API key handling in ModelRouter)
             temperature=default_configs["temperature"],
             max_output_tokens=max_out,
             **{k: v for k, v in kwargs.items() if k not in ["temperature", "max_tokens"]}
