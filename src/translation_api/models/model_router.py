@@ -134,7 +134,6 @@ class ModelRouter:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required for Gemini models")
         
-<<<<<<< HEAD
         provider_model_name = model_name
         if model_name == "gemini-2.5-flash-thinking":
             # Alias to the actual provider model id
@@ -143,31 +142,9 @@ class ModelRouter:
         # Determine desired max_output_tokens (prefer generation_config override)
         user_gc = kwargs.get("generation_config") or {}
         max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 16000))
-
-        base_model = ChatGoogleGenerativeAI(
-            google_api_key=self.settings.gemini_api_key,
-            model=provider_model_name,
-=======
-<<<<<<< Updated upstream
-        return ChatGoogleGenerativeAI(
-            google_api_key=self.settings.gemini_api_key,
-            model=model_name,
-=======
-        provider_model_name = model_name
-        if model_name == "gemini-2.5-flash-thinking":
-            # Alias to the actual provider model id
-            provider_model_name = "gemini-2.5-flash"
-
-        # Determine desired max_output_tokens (prefer generation_config override)
-        user_gc = kwargs.get("generation_config") or {}
-        max_out = user_gc.get("max_output_tokens", kwargs.get("max_tokens", 16000))
-
-        # Optional custom API endpoint
         base_model = ChatGoogleGenerativeAI(
             google_api_key=api_key,
             model=provider_model_name,
->>>>>>> Stashed changes
->>>>>>> 258f501 (Enhance API key handling in ModelRouter)
             temperature=default_configs["temperature"],
             max_output_tokens=max_out,
             **{k: v for k, v in kwargs.items() if k not in ["temperature", "max_tokens"]}
