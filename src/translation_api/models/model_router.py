@@ -20,6 +20,7 @@ class SupportedModel(Enum):
     CLAUDE_SONNET_4_20250514 = "claude-sonnet-4-20250514"
     CLAUDE_3_5_HAIKU_20241022 = "claude-3-5-haiku-20241022"
     CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
+    CLAUDE_SONNET_4_5 = "claude-sonnet-4-5"
     # OpenAI
     GPT4 = "gpt-4"
     GPT4_TURBO = "gpt-4-turbo"
@@ -76,6 +77,7 @@ class ModelRouter:
             "claude-sonnet-4-20250514",
             "claude-3-5-haiku-20241022",
             "claude-3-opus-20240229",
+            "claude-sonnet-4-5",
         ]:
             return self._create_anthropic_model(model_name, default_configs, **kwargs)
         
@@ -102,8 +104,20 @@ class ModelRouter:
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY is required for Claude models")
 
+        # Map model names to Anthropic model identifiers
+        model_mapping = {
+            "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022",
+            "claude-3-7-sonnet-20250219": "claude-3-7-sonnet-20250219",
+            "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
+            "claude-3-5-haiku-20241022": "claude-3-5-haiku-20241022",
+            "claude-3-opus-20240229": "claude-3-opus-20240229",
+            "claude-sonnet-4-5": "claude-sonnet-4-20250514",  # ← ADD THIS (use the actual Anthropic API model ID)
+        }
+
         # Expect exact Anthropic model IDs passed through
-        model_id = model_name
+        model_id = model_mapping.get(model_name)
+        if not model_id:
+            raise ValueError(f"Unsupported Anthropic model: {model_name}")
 
         return ChatAnthropic(
             anthropic_api_key=api_key,
@@ -209,6 +223,12 @@ class ModelRouter:
                     "description": "Claude 3 Opus (2024-02-29)",
                     "capabilities": ["text", "reasoning", "translation"],
                     "context_window": 200000
+                },
+                "claude-sonnet-4-5": {  # ← ADD THIS
+                    "provider": "Anthropic",
+                    "description": "Claude Sonnet 4.5 - Latest model with improved capabilities",
+                    "capabilities": ["text", "reasoning", "translation", "advanced-reasoning"],
+                    "context_window": 200000  # Update with actual context window
                 }
             })
         
