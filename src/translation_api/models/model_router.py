@@ -20,7 +20,8 @@ class SupportedModel(Enum):
     CLAUDE_SONNET_4_20250514 = "claude-sonnet-4-20250514"
     CLAUDE_3_5_HAIKU_20241022 = "claude-3-5-haiku-20241022"
     CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
-    CLAUDE_SONNET_4_5 = "claude-sonnet-4-5"
+    CLAUDE_HAIKU_4_5_20251001 = "claude-haiku-4-5-20251001"
+    CLAUDE_SONNET_4_5_20250929 = "claude-sonnet-4-5-20250929"
     # OpenAI
     GPT4 = "gpt-4"
     GPT4_TURBO = "gpt-4-turbo"
@@ -77,7 +78,8 @@ class ModelRouter:
             "claude-sonnet-4-20250514",
             "claude-3-5-haiku-20241022",
             "claude-3-opus-20240229",
-            "claude-sonnet-4-5",
+            "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-5-20250929",
         ]:
             return self._create_anthropic_model(model_name, default_configs, **kwargs)
         
@@ -111,7 +113,8 @@ class ModelRouter:
             "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
             "claude-3-5-haiku-20241022": "claude-3-5-haiku-20241022",
             "claude-3-opus-20240229": "claude-3-opus-20240229",
-            "claude-sonnet-4-5": "claude-sonnet-4-20250514",  # ← ADD THIS (use the actual Anthropic API model ID)
+            "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
+            "claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929",
         }
 
         # Expect exact Anthropic model IDs passed through
@@ -224,11 +227,17 @@ class ModelRouter:
                     "capabilities": ["text", "reasoning", "translation"],
                     "context_window": 200000
                 },
-                "claude-sonnet-4-5": {  # ← ADD THIS
+                "claude-haiku-4-5-20251001": {  # ← ADD THIS
                     "provider": "Anthropic",
-                    "description": "Claude Sonnet 4.5 - Latest model with improved capabilities",
+                    "description": "Claude haiku 4.5 - Latest model with improved capabilities",
                     "capabilities": ["text", "reasoning", "translation", "advanced-reasoning"],
                     "context_window": 200000  # Update with actual context window
+                },
+                "claude-sonnet-4-5-20250929": {
+                    "provider": "Anthropic",
+                    "description": "Claude Sonnet 4.5 (2025-09-29)",
+                    "capabilities": ["text", "reasoning", "translation", "advanced-reasoning"],
+                    "context_window": 200000
                 }
             })
         
