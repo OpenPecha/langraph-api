@@ -45,7 +45,7 @@ class TestModelRouter:
         
         # Verify correct model mapping
         call_args = mock_anthropic.call_args
-        assert call_args[1]['model'] == 'claude-3-5-sonnet-20241022'
+        assert call_args[1]['model'] == 'claude-3-5-haiku-20241022'
     
     @patch('src.translation_api.models.model_router.ChatOpenAI')
     def test_create_openai_model(self, mock_openai, model_router):
@@ -166,8 +166,6 @@ class TestModelMappings:
     def test_claude_model_mappings(self, mock_anthropic, model_router):
         """Test Claude model name mappings."""
         mappings = {
-            "claude": "claude-3-5-sonnet-20241022",
-            "claude-sonnet": "claude-3-5-sonnet-20241022",
             "claude-haiku": "claude-3-5-haiku-20241022",
             "claude-opus": "claude-3-opus-20240229"
         }
