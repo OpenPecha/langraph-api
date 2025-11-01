@@ -181,9 +181,9 @@ async def get_models():
     Example response:
     ```json
     {
-        "claude-3-7-sonnet-20250219": {
+        "claude-sonnet-4-20250514": {
             "provider": "Anthropic",
-            "description": "Claude 3.7 Sonnet (2025-02-19)",
+            "description": "Claude Sonnet 4.0 (2025-05-14)",
             "capabilities": ["text", "reasoning", "translation"],
             "context_window": 200000
         },
@@ -1193,7 +1193,7 @@ async def workflow_run(request: WorkflowRunRequest) -> WorkflowResponse:
     """
     inputs = request.input
     combo_key = request.combo_key
-    model_name = request.model_name or "claude-3-7-sonnet-20250219"
+    model_name = request.model_name or "claude-sonnet-4-20250514"
 
     if not inputs.source:
         raise HTTPException(status_code=400, detail="'source' is required")

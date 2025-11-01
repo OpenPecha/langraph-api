@@ -15,7 +15,6 @@ from ..config import get_settings
 class SupportedModel(Enum):
     """Enumeration of supported models."""
     # Anthropic - use exact model IDs
-    CLAUDE_3_7_SONNET_20250219 = "claude-3-7-sonnet-20250219"
     CLAUDE_SONNET_4_20250514 = "claude-sonnet-4-20250514"
     CLAUDE_3_5_HAIKU_20241022 = "claude-3-5-haiku-20241022"
     CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
@@ -75,7 +74,6 @@ class ModelRouter:
         }
         
         if model_name in [
-            "claude-3-7-sonnet-20250219",
             "claude-sonnet-4-20250514",
             "claude-3-5-haiku-20241022",
             "claude-3-opus-20240229",
@@ -109,7 +107,6 @@ class ModelRouter:
 
         # Map model names to Anthropic model identifiers
         model_mapping = {
-            "claude-3-7-sonnet-20250219": "claude-3-7-sonnet-20250219",
             "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
             "claude-3-5-haiku-20241022": "claude-3-5-haiku-20241022",
             "claude-3-opus-20240229": "claude-3-opus-20240229",
@@ -198,12 +195,7 @@ class ModelRouter:
         if self.settings.anthropic_api_key:
             available.update({
              
-                "claude-3-7-sonnet-20250219": {
-                    "provider": "Anthropic",
-                    "description": "Claude 3.7 Sonnet (2025-02-19)",
-                    "capabilities": ["text", "reasoning", "translation"],
-                    "context_window": 200000
-                },
+         
                 "claude-sonnet-4-20250514": {
                     "provider": "Anthropic",
                     "description": "Claude Sonnet 4.0 (2025-05-14)",
