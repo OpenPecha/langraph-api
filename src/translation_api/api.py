@@ -165,6 +165,37 @@ async def health_check():
     )
 
 
+@app.get("/models", tags=["System"], summary="Get All Supported Models")
+async def get_models():
+    """
+    Get a list of all supported translation models.
+    
+    Returns:
+        Dictionary of available models with their capabilities and configurations.
+        Each model includes:
+        - provider: The AI provider (Anthropic, OpenAI, Google)
+        - description: Model description
+        - capabilities: List of model capabilities
+        - context_window: Maximum context window size
+    
+    Example response:
+    ```json
+    {
+        "claude-3-7-sonnet-20250219": {
+            "provider": "Anthropic",
+            "description": "Claude 3.7 Sonnet (2025-02-19)",
+            "capabilities": ["text", "reasoning", "translation"],
+            "context_window": 200000
+        },
+        ...
+    }
+    ```
+    """
+    model_router = get_model_router()
+    available_models = model_router.get_available_models()
+    return available_models
+
+
 @app.post("/system/clear-cache", tags=["System"], summary="Clear Server-Side Cache")
 async def clear_cache():
     """
