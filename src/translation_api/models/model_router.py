@@ -1,13 +1,15 @@
 """Dynamic model routing system for translation API."""
 
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Union
 from enum import Enum
 
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.language_models import BaseChatModel
+import httpx
+import re
 
 from ..config import get_settings
 
@@ -93,6 +95,9 @@ class ModelRouter:
             "gemini-2.5-flash-thinking",
         ]:
             return self._create_gemini_model(model_name, default_configs, **kwargs)
+        
+        elif model_name in ["dharamitra"]:
+            return self._create_dharamitra_model(model_name, default_configs, **kwargs)
         
         else:
             raise ValueError(f"Unsupported model: {model_name}")
@@ -182,6 +187,22 @@ class ModelRouter:
 
         default_generation_config = {**base_gc, **thinking_gc}
         return _GeminiModelWrapper(base_model, default_generation_config)
+
+    def _create_dharamitra_model(self, model_name: str, default_configs: dict, **kwargs):
+        """Create a Dharmamitra chat-translate model wrapper (translation only)."""
+        # Allow per-call API key override via kwargs['api_key']
+        user_api_key = kwargs.pop("api_key", None)
+        token = user_api_key or self.settings.dharmamitra_token
+        if not token:
+            raise ValueError("DHARMAMITRA_TOKEN is required for 'dharamitra' model")
+
+        base_url = kwargs.pop(
+            "base_url",
+            "https://dharmamitra.org/api-search/chat-translate/v1/chat/completions",
+        )
+
+        # Return a lightweight wrapper exposing invoke/ainvoke compatible with our usage
+        return _DharmamitraModelWrapper(token=token, base_url=base_url)
     
     def get_available_models(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -265,6 +286,16 @@ class ModelRouter:
                     "context_window": 30720
                 }
             })
+        # Dharmamitra appears only if token is configured
+        if self.settings.dharmamitra_token:
+            available.update({
+                "dharamitra": {
+                    "provider": "Dharmamitra",
+                    "description": "Dharmamitra Chat Translate (mitra-base)",
+                    "capabilities": ["text", "translation"],
+                    "context_window": 0
+                }
+            })
         return available
 
     def validate_model_availability(self, model_name: str) -> bool:
@@ -335,6 +366,222 @@ class _GeminiModelWrapper:
         structured = self._base_model.with_structured_output(schema)
         # Use a config compatible with function-calling (no response_mime_type)
         return _GeminiModelWrapper(structured, self._structured_generation_config)
+
+
+class _SimpleResponse:
+    """Minimal response carrying text content (mimics LLM message content)."""
+    def __init__(self, content: str):
+        self.content = content
+
+
+class _DharmamitraModelWrapper:
+    """Translation-only wrapper integrating Dharmamitra chat-translate API.
+
+    Exposes invoke/ainvoke to match our translation code paths. Structured outputs
+    (with_structured_output, abatch) are not supported and will raise ValueError to
+    ensure this model is used only for translation.
+    """
+
+    def __init__(self, token: str, base_url: str):
+        self._token = token
+        self._base_url = base_url
+
+    def _extract_source_and_lang(self, content: str) -> (str, str):
+        """Heuristically extract source text and target language from our prompt."""
+        # Target language
+        lang = "english"
+        m_lang = re.search(r"Translate\s+the\s+provided\s+text\s+into\s+([A-Za-z\- ]+?)\s+while", content, re.IGNORECASE)
+        if m_lang:
+            lang = (m_lang.group(1) or "english").strip().lower()
+
+        # Source text block: between 'SOURCE TEXT:' and 'Translation:'
+        src = content
+        m_src = re.search(r"SOURCE\s+TEXT:\s*(.*?)\s*Translation:\s*\Z", content, re.IGNORECASE | re.DOTALL)
+        if m_src:
+            src = m_src.group(1).strip()
+
+        # If batch marker leaked in, try to drop instruction scaffolding
+        # Keep it simple; upstream expects raw Tibetan input
+        return src, lang or "english"
+
+    def _build_payload(self, source_text: str, target_lang: str, stream: bool = True) -> Dict[str, Any]:
+        return {
+            "model": "mitra-base",
+            "messages": [
+                {"role": "user", "content": source_text}
+            ],
+            "stream": bool(stream),
+            "do_grammar": False,
+            "input_encoding": "auto",
+            "target_lang": (target_lang or "english").lower(),
+        }
+
+    def _parse_response_text(self, data: Any, fallback_text: str) -> str:
+        # Try common shapes; otherwise fallback to raw text
+        try:
+            if isinstance(data, dict):
+                # OpenAI-like
+                choices = data.get("choices")
+                if isinstance(choices, list) and choices:
+                    msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+                    if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                        return msg["content"].strip()
+                # Direct content
+                if isinstance(data.get("content"), str):
+                    return data["content"].strip()
+                if isinstance(data.get("text"), str):
+                    return data["text"].strip()
+        except Exception:
+            pass
+        return (fallback_text or "").strip()
+
+    def invoke(self, input: Union[str, List[Any]], **kwargs):
+        # Accept either string or list of messages with .content
+        content = input
+        if isinstance(input, list) and input:
+            try:
+                content = "\n".join([getattr(m, "content", str(m)) for m in input])
+            except Exception:
+                content = str(input)
+        if not isinstance(content, str):
+            content = str(content)
+
+        source_text, target_lang = self._extract_source_and_lang(content)
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+        payload = self._build_payload(source_text, target_lang, stream=True)
+        try:
+            with httpx.Client(timeout=None) as client:
+                chunks: List[str] = []
+                with client.stream("POST", self._base_url, headers=headers, json=payload) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        try:
+                            s = line.decode("utf-8", errors="ignore") if isinstance(line, (bytes, bytearray)) else str(line)
+                            if not s.startswith("data: "):
+                                continue
+                            payload_str = s[6:].strip()
+                            if not payload_str or payload_str == "[DONE]":
+                                continue
+                            obj = None
+                            try:
+                                obj = httpx.Response(200, content=payload_str).json()
+                            except Exception:
+                                # Not JSON; append raw
+                                chunks.append(payload_str)
+                                continue
+                            # Try OpenAI-like delta
+                            if isinstance(obj, dict) and isinstance(obj.get("choices"), list):
+                                for ch in obj["choices"]:
+                                    delta = ch.get("delta") if isinstance(ch, dict) else None
+                                    if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+                                        chunks.append(delta["content"])
+                                    else:
+                                        msg = ch.get("message") if isinstance(ch, dict) else None
+                                        if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                                            chunks.append(msg["content"])  # full content
+                            else:
+                                # Generic fallbacks
+                                if isinstance(obj.get("content"), str):
+                                    chunks.append(obj["content"])
+                                elif isinstance(obj.get("text"), str):
+                                    chunks.append(obj["text"])
+                        except Exception:
+                            continue
+                final_text = "".join(chunks).strip()
+                if not final_text:
+                    # Fallback: try a non-stream call
+                    non_stream_headers = {k: v for k, v in headers.items() if k != "Accept"}
+                    non_stream_payload = self._build_payload(source_text, target_lang, stream=False)
+                    resp2 = client.post(self._base_url, headers=non_stream_headers, json=non_stream_payload, timeout=60.0)
+                    resp2.raise_for_status()
+                    try:
+                        data2 = resp2.json()
+                        final_text = self._parse_response_text(data2, resp2.text)
+                    except Exception:
+                        final_text = resp2.text
+                return _SimpleResponse(final_text)
+        except Exception as e:
+            return _SimpleResponse(f"LLM invocation error: {str(e)}")
+
+    async def ainvoke(self, input: Union[str, List[Any]], **kwargs):
+        content = input
+        if isinstance(input, list) and input:
+            try:
+                content = "\n".join([getattr(m, "content", str(m)) for m in input])
+            except Exception:
+                content = str(input)
+        if not isinstance(content, str):
+            content = str(content)
+
+        source_text, target_lang = self._extract_source_and_lang(content)
+        headers = {
+            "Authorization": f"Bearer {self._token}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+        payload = self._build_payload(source_text, target_lang, stream=True)
+        try:
+            async with httpx.AsyncClient(timeout=None) as client:
+                chunks: List[str] = []
+                async with client.stream("POST", self._base_url, headers=headers, json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+                        try:
+                            s = line
+                            if not s.startswith("data: "):
+                                continue
+                            payload_str = s[6:].strip()
+                            if not payload_str or payload_str == "[DONE]":
+                                continue
+                            obj = None
+                            try:
+                                obj = httpx.Response(200, content=payload_str).json()
+                            except Exception:
+                                chunks.append(payload_str)
+                                continue
+                            if isinstance(obj, dict) and isinstance(obj.get("choices"), list):
+                                for ch in obj["choices"]:
+                                    delta = ch.get("delta") if isinstance(ch, dict) else None
+                                    if isinstance(delta, dict) and isinstance(delta.get("content"), str):
+                                        chunks.append(delta["content"])
+                                    else:
+                                        msg = ch.get("message") if isinstance(ch, dict) else None
+                                        if isinstance(msg, dict) and isinstance(msg.get("content"), str):
+                                            chunks.append(msg["content"])  # full content
+                            else:
+                                if isinstance(obj.get("content"), str):
+                                    chunks.append(obj["content"])
+                                elif isinstance(obj.get("text"), str):
+                                    chunks.append(obj["text"])
+                        except Exception:
+                            continue
+                final_text = "".join(chunks).strip()
+                if not final_text:
+                    # Fallback: try non-stream
+                    non_stream_headers = {k: v for k, v in headers.items() if k != "Accept"}
+                    non_stream_payload = self._build_payload(source_text, target_lang, stream=False)
+                    resp2 = await client.post(self._base_url, headers=non_stream_headers, json=non_stream_payload, timeout=60.0)
+                    resp2.raise_for_status()
+                    try:
+                        data2 = resp2.json()
+                        final_text = self._parse_response_text(data2, resp2.text)
+                    except Exception:
+                        final_text = resp2.text
+                return _SimpleResponse(final_text)
+        except Exception as e:
+            return _SimpleResponse(f"LLM invocation error: {str(e)}")
+
+    def with_structured_output(self, schema):
+        # Translation-only: disallow structured outputs explicitly
+        raise ValueError("'dharamitra' model supports translation only; structured outputs are not available.")
 
 
 # Global model router instance
