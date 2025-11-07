@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Editor Comment Tester</title>
+  <style>
+    :root { --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --accent:#2f81f7; --ok:#2ea043; --err:#f85149; --bd:#30363d; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    .wrap { max-width: 1280px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    .panel { background:var(--panel); border:1px solid var(--bd); border-radius:8px; padding:16px; margin: 16px 0; }
+    .row { display:flex; gap:12px; flex-wrap: wrap; align-items:center; }
+    label { color: var(--muted); }
+    select, input[type="text"], textarea, input[type="number"] { background:#0b0f14; color:var(--text); border:1px solid var(--bd); border-radius:6px; padding:10px; width:100%; box-sizing:border-box; font-size:15px; }
+    textarea { min-height: 180px; }
+    .msg-content { min-height: 220px; }
+    .ref-content { min-height: 220px; }
+    .btn { background:var(--accent); color:white; border:0; border-radius:6px; padding:8px 12px; cursor:pointer; }
+    .btn.secondary { background:transparent; border:1px solid var(--bd); }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap:12px; }
+    .col-3 { grid-column: span 3; }
+    .col-4 { grid-column: span 4; }
+    .col-6 { grid-column: span 6; }
+    .col-8 { grid-column: span 8; }
+    .col-9 { grid-column: span 9; }
+    .col-12 { grid-column: span 12; }
+    .list { display:flex; flex-direction:column; gap:12px; }
+    .item { border:1px dashed var(--bd); border-radius:6px; padding:10px; }
+    .status { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; white-space: pre-wrap; background:#0b0f14; border:1px solid var(--bd); border-radius:6px; padding:10px; min-height:54px; }
+    .inline { display:flex; gap:8px; align-items:center; }
+    .pill { display:inline-block; padding:2px 8px; border:1px solid var(--bd); border-radius:12px; color:var(--muted); margin-right:6px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Editor Comment Tester</h1>
+
+    <div class="panel">
+      <div class="grid">
+        <div class="col-6">
+          <label>Model</label>
+          <select id="model">
+            <option value="">Auto (prefers gemini-2.5-pro)</option>
+            <option value="claude-sonnet-4-20250514">Claude Sonnet 4.0 (2025-05-14)</option>
+            <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (2025-09-29)</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (2025-10-01)</option>
+            <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (2024-10-22)</option>
+            <option value="claude-3-opus-20240229">Claude 3 Opus (2024-02-29)</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+            <option value="gemini-2.5-flash-thinking">Gemini 2.5 Flash (Thinking)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+          </select>
+        </div>
+        <div class="col-3">
+          <label>Mention Scope</label>
+          <select id="mentionScope">
+            <option value="last" selected>last</option>
+            <option value="thread">thread</option>
+          </select>
+        </div>
+        <div class="col-3">
+          <label>Max Mentions</label>
+          <input type="number" id="maxMentions" value="5" min="0" max="20" />
+        </div>
+        <div class="col-12 inline">
+          <label><input type="checkbox" id="requireJust" checked /> require_full_justification</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin:0 0 8px; font-size:16px;">Messages (OpenAI format)</h2>
+      <div id="messages" class="list"></div>
+      <div class="inline" style="margin-top:8px;">
+        <button class="btn secondary" id="addMsgBtn">+ Add Message</button>
+        <button class="btn secondary" id="addCommentTriggerBtn">+ Add @Comment Message</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 style="margin:0 0 8px; font-size:16px;">References (dynamic)</h2>
+      <div id="refs" class="list"></div>
+      <div class="inline" style="margin-top:8px;">
+        <button class="btn secondary" id="addRefBtn">+ Add Reference</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="inline" style="gap:12px;">
+        <button class="btn" id="runBtn">Run (non-stream)</button>
+        <button class="btn" id="runStreamBtn">Run (stream)</button>
+        <button class="btn secondary" id="clearBtn">Clear Output</button>
+        <span id="statusPill" class="pill">idle</span>
+      </div>
+      <div style="margin-top:12px;" class="grid">
+        <div class="col-12">
+          <label>Mentions</label>
+          <div id="mentions" class="status"></div>
+        </div>
+        <div class="col-12">
+          <label>Comment (accumulated)</label>
+          <div id="comment" class="status"></div>
+        </div>
+        <div class="col-12">
+          <label>Citations Used</label>
+          <div id="citations" class="status"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const ui = {
+      els: {
+        model: document.getElementById('model'),
+        mentionScope: document.getElementById('mentionScope'),
+        maxMentions: document.getElementById('maxMentions'),
+        requireJust: document.getElementById('requireJust'),
+        messages: document.getElementById('messages'),
+        refs: document.getElementById('refs'),
+        addMsgBtn: document.getElementById('addMsgBtn'),
+        addCommentTriggerBtn: document.getElementById('addCommentTriggerBtn'),
+        addRefBtn: document.getElementById('addRefBtn'),
+        runBtn: document.getElementById('runBtn'),
+        runStreamBtn: document.getElementById('runStreamBtn'),
+        clearBtn: document.getElementById('clearBtn'),
+        statusPill: document.getElementById('statusPill'),
+        mentions: document.getElementById('mentions'),
+        comment: document.getElementById('comment'),
+        citations: document.getElementById('citations'),
+      },
+
+      baseUrl() {
+        let base = window.location.href;
+        if (base.includes('/static/editor.html')) base = base.replace('/static/editor.html','');
+        return base;
+      },
+
+      addMessage(role = 'user', content = '') {
+        const wrap = document.createElement('div');
+        wrap.className = 'item';
+        wrap.innerHTML = `
+          <div class="grid">
+            <div class="col-3">
+              <label>role</label>
+              <select class="msg-role">
+                <option value="user" ${role==='user'?'selected':''}>user</option>
+                <option value="assistant" ${role==='assistant'?'selected':''}>assistant</option>
+                <option value="system" ${role==='system'?'selected':''}>system</option>
+                <option value="tool" ${role==='tool'?'selected':''}>tool</option>
+              </select>
+            </div>
+            <div class="col-9">
+              <label>content</label>
+              <textarea class="msg-content" placeholder="Tenzin: … @Kun @Comment">${content}</textarea>
+            </div>
+            <div class="col-12 inline">
+              <button class="btn secondary msg-del">Remove</button>
+            </div>
+          </div>
+        `;
+        wrap.querySelector('.msg-del').onclick = () => wrap.remove();
+        ui.els.messages.appendChild(wrap);
+      },
+
+      addReference(type = '', content = '') {
+        const wrap = document.createElement('div');
+        wrap.className = 'item';
+        wrap.innerHTML = `
+          <div class="grid">
+            <div class="col-4">
+              <label>type</label>
+              <input type="text" class="ref-type" placeholder="commentary | sanskrit | ..." value="${type}" />
+            </div>
+            <div class="col-8">
+              <label>content</label>
+              <textarea class="ref-content" placeholder="reference excerpt or note">${content}</textarea>
+            </div>
+            <div class="col-12 inline">
+              <button class="btn secondary ref-del">Remove</button>
+            </div>
+          </div>
+        `;
+        wrap.querySelector('.ref-del').onclick = () => wrap.remove();
+        ui.els.refs.appendChild(wrap);
+      },
+
+      collect() {
+        const messages = [...ui.els.messages.querySelectorAll('.item')].map(it => ({
+          role: it.querySelector('.msg-role').value,
+          content: it.querySelector('.msg-content').value
+        }));
+        const references = [...ui.els.refs.querySelectorAll('.item')].map(it => ({
+          type: it.querySelector('.ref-type').value,
+          content: it.querySelector('.ref-content').value
+        }));
+        const opts = {
+          model_name: ui.els.model.value || undefined,
+          mention_scope: ui.els.mentionScope.value,
+          max_mentions: parseInt(ui.els.maxMentions.value || '5', 10),
+          require_full_justification: ui.els.requireJust.checked
+        };
+        return { messages, references, options: opts };
+      },
+
+      setStatus(s) { ui.els.statusPill.textContent = s; },
+      clearOutput() { ui.els.mentions.textContent = ''; ui.els.comment.textContent = ''; ui.els.citations.textContent = ''; },
+
+      async runNonStream() {
+        ui.setStatus('running…');
+        ui.clearOutput();
+        const payload = ui.collect();
+        try {
+          const res = await fetch(`${ui.baseUrl()}/editor/comment`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          ui.els.mentions.textContent = (data.mentions || []).join(' ');
+          ui.els.comment.textContent = data.comment_text || '';
+          ui.els.citations.textContent = (data.citations_used || []).join(', ');
+          ui.setStatus('done');
+        } catch (e) {
+          ui.els.comment.textContent = `Error: ${e.message}`;
+          ui.setStatus('error');
+        }
+      },
+
+      async runStream() {
+        ui.setStatus('streaming…');
+        ui.clearOutput();
+        const payload = ui.collect();
+        try {
+          const res = await fetch(`${ui.baseUrl()}/editor/comment/stream`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept':'text/event-stream' }, body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          const process = async ({done, value}) => {
+            if (done) { ui.setStatus('done'); return; }
+            const chunk = decoder.decode(value);
+            for (const line of chunk.split('\n')) {
+              if (!line.startsWith('data: ')) continue;
+              let jsonStr = line.slice(6).trim();
+              if (jsonStr.startsWith('data: ')) jsonStr = jsonStr.slice(6).trim();
+              if (!jsonStr) continue;
+              try {
+                const evt = JSON.parse(jsonStr);
+                if (evt.skipped) { ui.els.comment.textContent = 'Skipped: ' + (evt.reason||''); continue; }
+                switch(evt.type) {
+                  case 'initialization':
+                    ui.els.mentions.textContent = (evt.mentions||[]).join(' '); break;
+                  case 'comment_delta':
+                    ui.els.comment.textContent += evt.text || ''; break;
+                  case 'completion':
+                    ui.els.citations.textContent = (evt.citations_used||[]).join(', '); break;
+                  case 'error':
+                    ui.els.comment.textContent = 'Error: ' + (evt.message||''); ui.setStatus('error'); break;
+                  default:
+                    // ignore
+                    break;
+                }
+              } catch(e) { /* ignore parse errors */ }
+            }
+            return reader.read().then(process);
+          };
+          return reader.read().then(process);
+        } catch (e) {
+          ui.els.comment.textContent = `Error: ${e.message}`;
+          ui.setStatus('error');
+        }
+      },
+
+      init() {
+        // seed one normal message and one reference
+        ui.addMessage('user', 'Tenzin: Please review the translation … @Kun @Comment');
+        ui.addReference('commentary', '…commentary excerpt…');
+        ui.addReference('sanskrit', '…sanskrit root form…');
+
+        ui.els.addMsgBtn.onclick = () => ui.addMessage('user','');
+        ui.els.addCommentTriggerBtn.onclick = () => ui.addMessage('user','Tenzin: … @Comment');
+        ui.els.addRefBtn.onclick = () => ui.addReference('', '');
+        ui.els.runBtn.onclick = () => ui.runNonStream();
+        ui.els.runStreamBtn.onclick = () => ui.runStream();
+        ui.els.clearBtn.onclick = () => ui.clearOutput();
+      }
+    };
+
+    ui.init();
+  </script>
+</body>
+</html>
+
+

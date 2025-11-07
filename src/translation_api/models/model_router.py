@@ -321,9 +321,11 @@ class _GeminiModelWrapper:
     def __init__(self, base_model: BaseChatModel, generation_config: dict):
         self._base_model = base_model
         self._generation_config = generation_config or {}
-        # Structured runs (function-calling) cannot combine with response_mime_type=json
+        # Structured runs (function-calling) cannot combine with response_mime_type or thinking_config
         self._structured_generation_config = {
-            k: v for k, v in self._generation_config.items() if k != "response_mime_type"
+            k: v
+            for k, v in self._generation_config.items()
+            if k not in ["response_mime_type", "thinking_config"]
         }
 
     # Fallback for any attributes/methods not overridden
@@ -339,6 +341,9 @@ class _GeminiModelWrapper:
         # If caller asked for plain text, remove JSON MIME
         if merged.get("response_mime_type") == "text/plain":
             merged.pop("response_mime_type", None)
+        # Remove unsupported fields (library may not accept thinking_config)
+        if "thinking_config" in merged:
+            merged.pop("thinking_config", None)
         kwargs["generation_config"] = merged
         return self._base_model.invoke(input, **kwargs)
 
@@ -349,6 +354,8 @@ class _GeminiModelWrapper:
         merged = {**self._generation_config, **gc}
         if merged.get("response_mime_type") == "text/plain":
             merged.pop("response_mime_type", None)
+        if "thinking_config" in merged:
+            merged.pop("thinking_config", None)
         kwargs["generation_config"] = merged
         return await self._base_model.ainvoke(input, **kwargs)
 
@@ -359,6 +366,8 @@ class _GeminiModelWrapper:
         merged = {**self._generation_config, **gc}
         if merged.get("response_mime_type") == "text/plain":
             merged.pop("response_mime_type", None)
+        if "thinking_config" in merged:
+            merged.pop("thinking_config", None)
         kwargs["generation_config"] = merged
         return await self._base_model.abatch(inputs, **kwargs)
 
@@ -366,6 +375,34 @@ class _GeminiModelWrapper:
         structured = self._base_model.with_structured_output(schema)
         # Use a config compatible with function-calling (no response_mime_type)
         return _GeminiModelWrapper(structured, self._structured_generation_config)
+
+    # Streaming helpers (merge generation_config like other calls)
+    def astream_events(self, input, **kwargs):
+        gc = kwargs.get("generation_config") or {}
+        if gc is None:
+            gc = {}
+        merged = {**self._generation_config, **gc}
+        # If caller requested plain text tokens, remove JSON MIME
+        if merged.get("response_mime_type") == "text/plain":
+            merged.pop("response_mime_type", None)
+        if "thinking_config" in merged:
+            merged.pop("thinking_config", None)
+        kwargs["generation_config"] = merged
+        # Return the async generator directly (caller will async-iterate)
+        return self._base_model.astream_events(input, **kwargs)
+
+    def astream(self, input, **kwargs):
+        gc = kwargs.get("generation_config") or {}
+        if gc is None:
+            gc = {}
+        merged = {**self._generation_config, **gc}
+        if merged.get("response_mime_type") == "text/plain":
+            merged.pop("response_mime_type", None)
+        if "thinking_config" in merged:
+            merged.pop("thinking_config", None)
+        kwargs["generation_config"] = merged
+        # Return the async generator directly
+        return self._base_model.astream(input, **kwargs)
 
 
 class _SimpleResponse:

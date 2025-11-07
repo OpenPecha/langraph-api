@@ -56,6 +56,12 @@ from .models.workflow import (
     WorkflowBatchRequest,
     WorkflowBatchItemResult,
 )
+from .models.comment import (
+    EditorCommentRequest,
+    EditorCommentResponse,
+    EditorCommentLLMOutput,
+)
+from langchain_core.messages import HumanMessage
 
 # Import from root level graph module
 import sys
@@ -847,6 +853,241 @@ async def run_pipeline(request: PipelineRequest) -> PipelineResponse:
 def create_app() -> FastAPI:
     """Factory function to create the FastAPI app."""
     return app
+
+
+# --- Editor Comment Endpoints ---
+
+import re as _re
+
+
+def _extract_mentions(messages: list[dict], scope: str = "last", max_mentions: int = 5) -> list[str]:
+    pattern = _re.compile(r"@[A-Za-z0-9_\-]+")
+    contents: list[str] = []
+    if scope == "thread":
+        contents = [m.content for m in messages if hasattr(m, "content")]
+    else:
+        if messages:
+            contents = [messages[-1].content]
+    seen = set()
+    mentions: list[str] = []
+    for c in contents:
+        for h in pattern.findall(c or ""):
+            if h not in seen:
+                mentions.append(h)
+                seen.add(h)
+                if len(mentions) >= max_mentions:
+                    return mentions
+    return mentions
+
+
+def _enumerate_references(refs: list[dict]) -> tuple[str, list[str]]:
+    lines: list[str] = []
+    ids: list[str] = []
+    for i, r in enumerate(refs, start=1):
+        t = (getattr(r, "type", None) or "ref").strip().lower()
+        slug = _re.sub(r"[^a-z0-9\-]", "-", t) or "ref"
+        rid = f"ref-{slug}-{i}"
+        ids.append(rid)
+        content = getattr(r, "content", "")
+        lines.append(f"- [{rid}] (type={t}) {content}")
+    section = "\n".join(lines) if lines else "None."
+    return section, ids
+
+
+def _build_thread(messages: list[dict]) -> str:
+    lines: list[str] = []
+    for m in messages:
+        role = getattr(m, "role", "user")
+        content = getattr(m, "content", "")
+        lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
+def _build_mentions_section(mentions: list[str]) -> str:
+    if not mentions:
+        return "None."
+    return "\n".join([f"- {h}" for h in mentions])
+
+
+def _build_editor_prompt(thread_text: str, refs_section: str, mentions_section: str) -> str:
+    return (
+        "You are a Tibetan Buddhist translation reviewer. Produce a concise, actionable commentary grounded ONLY in the provided references.\n\n"
+        "TRIGGER\n"
+        "- Proceed ONLY if the last message contains \"@Comment\".\n"
+        "- If absent, return exactly:\n"
+        '{"skipped": true, "reason": "No @Comment trigger"}\n'
+        "and stop.\n\n"
+        "THREAD (most recent last)\n"
+        f"{thread_text}\n\n"
+        "REFERENCES (use these IDs for citations)\n"
+        f"{refs_section}\n\n"
+        "MENTIONS\n"
+        f"{mentions_section}\n\n"
+        "TASK\n"
+        "- Evaluate terminology, doctrinal accuracy, register, grammar, and consistency.\n"
+        "- Make minimal, high-impact suggestions.\n"
+        "- Every sentence MUST be supported by at least one reference and MUST end with bracketed citations using the exact IDs above (e.g., \"... [ref-commentary-1]\" or \"... [ref-scan-2;ref-lexicon-3]\").\n"
+        "- If evidence is insufficient, do not make the claim. If critical context is missing, end with a short sentence requesting the needed references and cite [ref-needed].\n"
+        "- If MENTIONS is non-empty, begin the comment with all handles in order, space-separated (e.g., \"@Kun @Tenzin \"), using the handles exactly.\n\n"
+        "OUTPUT (JSON ONLY; single object)\n"
+        "{\n"
+        "  \"comment_text\": \"The full commentary with inline bracketed citations at the end of each sentence.\",\n"
+        "  \"citations_used\": [\"ref-...\"]\n"
+        "}\n\n"
+        "RULES\n"
+        "- Only output the JSON object above; no extra fields.\n"
+        "- citations_used must be the unique set of IDs actually cited in comment_text.\n"
+        "- Do not invent references or handles.\n"
+    )
+
+
+@app.post("/editor/comment", response_model=EditorCommentResponse, tags=["Editor"], summary="Generate grounded commentary for a translation thread")
+async def editor_comment(request: EditorCommentRequest):
+    # Trigger check (@Comment in last message)
+    if not request.messages or "@Comment" not in (request.messages[-1].content or ""):
+        return {"mentions": [], "comment_text": "", "citations_used": [], "metadata": {"skipped": True, "reason": "No @Comment trigger"}}
+
+    opts = request.options or {}
+    mention_scope = getattr(opts, "mention_scope", "last")
+    max_mentions = getattr(opts, "max_mentions", 5)
+
+    # Mentions and references enumeration
+    mentions = _extract_mentions(request.messages, scope=mention_scope, max_mentions=max_mentions)
+    refs_section, _all_ids = _enumerate_references(request.references)
+    thread_text = _build_thread(request.messages)
+    mentions_section = _build_mentions_section(mentions)
+    prompt = _build_editor_prompt(thread_text, refs_section, mentions_section)
+
+    # Choose model (disallow 'dharamitra')
+    model_router = get_model_router()
+    selected_model = getattr(opts, "model_name", None)
+    if selected_model and selected_model.lower() == "dharamitra":
+        raise HTTPException(status_code=400, detail="'dharamitra' is translation-only and not supported for editor comments")
+    # Fallback preference: gemini-2.5-pro if available else default
+    model_name = selected_model or ("gemini-2.5-pro" if model_router.validate_model_availability("gemini-2.5-pro") else get_settings().default_model)
+    if not model_router.validate_model_availability(model_name):
+        available = list(model_router.get_available_models().keys())
+        raise HTTPException(status_code=400, detail=f"Model '{model_name}' is not available. Available models: {available}")
+
+    model = model_router.get_model(model_name)
+    structured = model.with_structured_output(EditorCommentLLMOutput)
+
+    try:
+        resp = await structured.ainvoke(prompt)
+        comment_text = resp.comment_text
+        citations_used = resp.citations_used or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Editor comment generation failed: {str(e)}")
+
+    return EditorCommentResponse(
+        mentions=mentions,
+        comment_text=comment_text,
+        citations_used=citations_used,
+        metadata={
+            "triggered_by": "@Comment",
+            "model_used": model_name,
+        },
+    )
+
+
+@app.post("/editor/comment/stream", tags=["Editor"], summary="Generate grounded commentary (SSE)")
+async def editor_comment_stream(request: EditorCommentRequest):
+    async def _gen():
+        # Trigger check
+        if not request.messages or "@Comment" not in (request.messages[-1].content or ""):
+            yield f"data: {{\"skipped\": true, \"reason\": \"No @Comment trigger\"}}\n\n"
+            return
+
+        opts = request.options or {}
+        mention_scope = getattr(opts, "mention_scope", "last")
+        max_mentions = getattr(opts, "max_mentions", 5)
+
+        mentions = _extract_mentions(request.messages, scope=mention_scope, max_mentions=max_mentions)
+        refs_section, _all_ids = _enumerate_references(request.references)
+        thread_text = _build_thread(request.messages)
+        mentions_section = _build_mentions_section(mentions)
+        prompt = _build_editor_prompt(thread_text, refs_section, mentions_section)
+
+        # Model selection
+        model_router = get_model_router()
+        selected_model = getattr(opts, "model_name", None)
+        if selected_model and selected_model.lower() == "dharamitra":
+            yield f"data: {{\"error\": \"'dharamitra' not supported for editor comments\"}}\n\n"
+            return
+        model_name = selected_model or ("gemini-2.5-pro" if model_router.validate_model_availability("gemini-2.5-pro") else get_settings().default_model)
+        if not model_router.validate_model_availability(model_name):
+            avail = list(model_router.get_available_models().keys())
+            yield f"data: {{\"error\": \"Model '{model_name}' not available.\", \"available\": {json.dumps(avail)} }}\n\n"
+            return
+
+        yield f"data: {{\"type\": \"initialization\", \"mentions\": {json.dumps(mentions)}, \"model_used\": {json.dumps(model_name)} }}\n\n"
+
+        # Build a streaming-friendly prompt (plain text output only)
+        def _build_editor_stream_prompt(thread_text: str, refs_section: str, mentions_section: str) -> str:
+            return (
+                "You are a Tibetan Buddhist translation reviewer. Produce a concise, actionable commentary grounded ONLY in the provided references.\n\n"
+                "TRIGGER\n- Proceed ONLY if the last message contains \"@Comment\". If absent, output exactly: SKIP and stop.\n\n"
+                "THREAD (most recent last)\n" + thread_text + "\n\n"
+                "REFERENCES (use these IDs for citations)\n" + refs_section + "\n\n"
+                "MENTIONS\n" + mentions_section + "\n\n"
+                "TASK\n"
+                "- Begin the comment with all handles in MENTIONS (space-separated) if any.\n"
+                "- Make minimal, high-impact suggestions only.\n"
+                "- Every sentence MUST end with bracketed citations using the exact IDs from REFERENCES, e.g., [ref-...;ref-...].\n"
+                "- Do not add any preface or headers; output ONLY the final comment text.\n"
+            )
+
+        stream_prompt = _build_editor_stream_prompt(thread_text, refs_section, mentions_section)
+
+        # If trigger missing, short-circuit
+        if "@Comment" not in (request.messages[-1].content or ""):
+            yield "data: {\"skipped\": true, \"reason\": \"No @Comment trigger\"}\n\n"
+            return
+
+        model = model_router.get_model(model_name)
+        full_text = ""
+        try:
+            # Prefer token-level events when available
+            gc = {"response_mime_type": "text/plain"} if model_name.startswith("gemini") else {}
+            try:
+                async for event in model.astream_events([HumanMessage(content=stream_prompt)], generation_config=gc):
+                    et = event.get("event")
+                    if et in ("on_chat_model_stream", "on_llm_stream"):
+                        chunk = event.get("data", {}).get("chunk")
+                        piece = getattr(chunk, "content", None)
+                        if isinstance(piece, list):
+                            piece = "".join([str(p) for p in piece])
+                        if isinstance(piece, str) and piece:
+                            full_text += piece
+                            yield f"data: {{\"type\": \"comment_delta\", \"text\": {json.dumps(piece)} }}\n\n"
+            except AttributeError:
+                # Fallback: no native streaming; use single shot but send once
+                resp = await model.ainvoke([HumanMessage(content=stream_prompt)], generation_config=gc)
+                text = getattr(resp, "content", "") or ""
+                if isinstance(text, list):
+                    text = "".join([str(p) for p in text])
+                full_text = str(text)
+                if full_text:
+                    yield f"data: {{\"type\": \"comment_delta\", \"text\": {json.dumps(full_text)} }}\n\n"
+
+            # Derive citations_used by scanning bracketed IDs
+            ids = []
+            try:
+                import re as _rx
+                for m in _rx.finditer(r"\[(.*?)\]", full_text):
+                    inside = m.group(1) or ""
+                    for tok in inside.split(";"):
+                        t = tok.strip()
+                        if t and t not in ids:
+                            ids.append(t)
+            except Exception:
+                pass
+
+            yield f"data: {{\"type\": \"completion\", \"comment_text\": {json.dumps(full_text)}, \"citations_used\": {json.dumps(ids)}, \"mentions\": {json.dumps(mentions)} }}\n\n"
+        except Exception as e:
+            yield f"data: {{\"type\": \"error\", \"message\": {json.dumps(str(e))} }}\n\n"
+
+    return EventSourceResponse(_gen(), media_type="text/event-stream")
 # --- Dharmamitra Proxy Endpoints ---
 
 class DharmamitraKnnRequest(BaseModel):
