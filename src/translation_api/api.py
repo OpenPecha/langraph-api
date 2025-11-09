@@ -1048,9 +1048,14 @@ async def editor_comment_stream(request: EditorCommentRequest):
         full_text = ""
         try:
             # Prefer token-level events when available
-            gc = {"response_mime_type": "text/plain"} if model_name.startswith("gemini") else {}
             try:
-                async for event in model.astream_events([HumanMessage(content=stream_prompt)], generation_config=gc):
+                # Only pass generation_config for Gemini models
+                if model_name.startswith("gemini"):
+                    stream_kwargs = {"generation_config": {"response_mime_type": "text/plain"}}
+                else:
+                    stream_kwargs = {}
+                
+                async for event in model.astream_events([HumanMessage(content=stream_prompt)], **stream_kwargs):
                     et = event.get("event")
                     if et in ("on_chat_model_stream", "on_llm_stream"):
                         chunk = event.get("data", {}).get("chunk")
@@ -1062,7 +1067,10 @@ async def editor_comment_stream(request: EditorCommentRequest):
                             yield f"data: {{\"type\": \"comment_delta\", \"text\": {json.dumps(piece)} }}\n\n"
             except AttributeError:
                 # Fallback: no native streaming; use single shot but send once
-                resp = await model.ainvoke([HumanMessage(content=stream_prompt)], generation_config=gc)
+                if model_name.startswith("gemini"):
+                    resp = await model.ainvoke([HumanMessage(content=stream_prompt)], generation_config={"response_mime_type": "text/plain"})
+                else:
+                    resp = await model.ainvoke([HumanMessage(content=stream_prompt)])
                 text = getattr(resp, "content", "") or ""
                 if isinstance(text, list):
                     text = "".join([str(p) for p in text])
