@@ -43,6 +43,15 @@ class SimpleCache:
         self.translation_cache.clear()
         self.glossary_cache.clear()
 
+    def clear(self) -> int:
+        """Clears both the translation and glossary caches and returns the count of cleared items."""
+        translation_count = len(self.translation_cache)
+        glossary_count = len(self.glossary_cache)
+        total_count = translation_count + glossary_count
+        self.translation_cache.clear()
+        self.glossary_cache.clear()
+        return total_count
+
 # Global instance
 cache = SimpleCache()
 

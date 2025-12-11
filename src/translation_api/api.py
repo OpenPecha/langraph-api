@@ -81,6 +81,7 @@ class TranslationAPIRequest(BaseModel):
     batch_size: int = Field(5, description="Number of texts to process per batch", ge=1, le=50)
     model_params: Dict[str, Any] = Field(default_factory=dict, description="Additional model parameters")
     user_rules: Optional[str] = Field(None, description="Optional custom translation rules/instructions")
+    context: Optional[str] = Field(None, description="Optional context for translation")
 
 
 class TranslationAPIResponse(BaseModel):
@@ -280,7 +281,8 @@ async def translate_texts(request: TranslationAPIRequest):
             text_type=request.text_type,
             batch_size=request.batch_size,
             model_params=request.model_params,
-            user_rules=request.user_rules
+            user_rules=request.user_rules,
+            context=request.context
         )
         
         # Run the translation workflow
@@ -412,7 +414,8 @@ async def stream_translate_texts(request: TranslationAPIRequest):
             text_type=request.text_type,
             batch_size=request.batch_size,
             model_params=request.model_params,
-            user_rules=request.user_rules
+            user_rules=request.user_rules,
+            context=request.context
         )
         
         # Return SSE stream

@@ -16,6 +16,7 @@ class TranslationRequest(BaseModel):
     batch_size: int = Field(5, description="Number of texts to process per batch")
     model_params: Dict[str, Any] = Field(default_factory=dict, description="Additional model parameters")
     user_rules: Optional[str] = Field(None, description="Optional custom translation rules/instructions")
+    context: Optional[str] = Field(None, description="Optional context for translation")
 
 
 class TranslationBatch(BaseModel):

@@ -492,6 +492,15 @@
                     ></textarea>
                 </div>
 
+                <div class="setting-group" style="grid-column: 1 / -1; margin-bottom: 20px;">
+                    <label for="context">Context (Optional)</label>
+                    <textarea 
+                        id="context" 
+                        placeholder="Enter any additional context for translation here (optional)..."
+                        style="min-height: 80px; max-height: 120px;"
+                    ></textarea>
+                </div>
+
                 <div class="input-area">
                     <label for="inputText" style="margin-bottom: 10px; font-weight: 500;">
                         Enter Buddhist texts (one per line):
@@ -743,6 +752,7 @@ Form is emptiness, emptiness is form"
                     model: document.getElementById('model'),
                     batchSize: document.getElementById('batchSize'),
                     userRules: document.getElementById('userRules'),
+                    context: document.getElementById('context'),
                     translateBtn: document.getElementById('translateBtn'),
                     clearCacheBtn: document.getElementById('clearCacheBtn'),
                     progressContainer: document.getElementById('progressContainer'),
@@ -1111,7 +1121,8 @@ Form is emptiness, emptiness is form"
                     text_type: this.elements.textType.value,
                     model_name: this.elements.model.value,
                     batch_size: parseInt(this.elements.batchSize.value),
-                    user_rules: this.elements.userRules.value.trim() || null
+                    user_rules: this.elements.userRules.value.trim() || null,
+                    context: this.elements.context.value.trim() || null
                 };
 
                 this.connectToStream(requestData);

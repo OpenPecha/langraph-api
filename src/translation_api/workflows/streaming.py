@@ -9,12 +9,18 @@ from datetime import datetime
 from .translation_state import TranslationRequest, TranslationResult
 from ..models.model_router import get_model_router
 from ..models.glossary import Glossary
-from ..prompts.tibetan_buddhist import get_translation_prompt, GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT
+from ..prompts.tibetan_buddhist import get_translation_prompt,get_context_prompt, GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT
 from ..utils.helpers import clean_translation_text, parse_batch_translation_response
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage,SystemMessage
 from ..cache import get_cache
 from ..models.standardization import StandardizationRequest, RetranslationResponse
 from ..prompts.tibetan_buddhist import RETRANSLATION_PROMPT
+
+from langchain_community.cache import InMemoryCache
+import langchain
+langchain.llm_cache = InMemoryCache()
+
+
 
 async def _extract_glossary_for_pair_async(model: Any, source_text: str, translated_text: str) -> List:
     """Async helper to extract glossary for a single source/translation pair."""
@@ -59,6 +65,7 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
     start_time = time.time()
     total_texts = len(request.texts)
     cache = get_cache()
+    context= request.context or ""
     
     # Emit initialization event
     yield ProgressEvent("initialization", {
@@ -132,14 +139,16 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                     if cached_translation:
                         clean_translation = cached_translation
                     else:
+                        context_prompt = get_context_prompt(context)
                         prompt = get_translation_prompt(
                             source_text=text_to_translate,
                             target_language=request.target_language,
                             text_type=request.text_type,
                             user_rules=request.user_rules
                         )
-                        message = HumanMessage(content=prompt)
-                        response = await model.ainvoke([message])
+                        
+                        message = [ HumanMessage(content=context_prompt + "\n\n" + prompt)]
+                        response = await model.ainvoke(message)
                         clean_translation = clean_translation_text(response.content)
                         cache.set_translation(translation_key, clean_translation)
 
@@ -156,7 +165,6 @@ async def stream_translation_progress(request: TranslationRequest) -> AsyncGener
                             cache.set_glossary(glossary_key, glossary_terms)
                         except Exception:
                             pass # Fail silently for the streamer
-
                     result = TranslationResult(
                         original_text=text_to_translate,
                         translated_text=clean_translation,
