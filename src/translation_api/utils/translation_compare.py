@@ -1,6 +1,5 @@
 # connect to milvus db
 
-from langchain_milvus import Milvus
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import os
 from dotenv import load_dotenv
