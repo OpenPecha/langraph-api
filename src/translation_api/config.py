@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     max_batch_size: int = Field(50, env="MAX_BATCH_SIZE")
     default_batch_size: int = Field(5, env="DEFAULT_BATCH_SIZE")
     
+    #Milvus
+    milvus_uri: str = Field(None, env="MILVUS_URI")
+    milvus_token: str = Field(None, env="MILVUS_TOKEN")
+    milvus_collection_name: str = Field(None, env="MILVUS_COLLECTION_NAME")
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -17,7 +17,7 @@ def main():
     uvicorn.run(
         "src.translation_api.api:app",
         host=settings.api_host,
-        port=8002,
+        port=settings.api_port,
         reload=True,
         log_level="info"
     )
