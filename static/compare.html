@@ -4,21 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Translation Comparison Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jomolhari&family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif+Tibetan:wght@100..900&display=swap" rel="stylesheet">
     <style>
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            font-family: "Noto Sans", sans-serif; 
         }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: "Noto Sans", sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
             color: #333;
         }
-
         .container {
             max-width: 1200px;
             margin: 0 auto;
@@ -26,68 +28,66 @@
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             overflow: hidden;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
             color: white;
             padding: 40px 30px;
             text-align: center;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
             font-weight: 600;
             text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-family: "Noto Sans", sans-serif;
         }
-
         .header p {
             font-size: 1.1em;
             opacity: 0.95;
             margin: 0;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .content {
             padding: 40px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .input-section {
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .input-section label {
             display: block;
             font-weight: 600;
             margin-bottom: 12px;
             color: #333;
             font-size: 1.1em;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .input-section textarea {
-            width: 100%;
+            width: 100%; 
             min-height: 150px;
-            padding: 16px;
-            border: 2px solid #e0e0e0;
+            padding: 16px; 
+            border: 2px solid #e0e0e0; 
             border-radius: 8px;
-            font-size: 16px;
-            font-family: inherit;
-            resize: vertical;
+            font-size: 1.5em;
+            font-family: "Noto Sans", sans-serif; 
+            resize: vertical; 
             transition: border-color 0.3s ease;
         }
-
         .input-section textarea:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
         }
-
         .button-group {
             display: flex;
             gap: 12px;
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         button {
             flex: 1;
             padding: 16px 32px;
@@ -99,49 +99,36 @@
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
             color: white;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+            font-family: "Noto Sans", sans-serif;
         }
-
         .btn-primary:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+            box-shadow: 0 6px 20px rgba(102,126,234,0.5);
         }
-
-        .btn-primary:active:not(:disabled) {
-            transform: translateY(0);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
+        .btn-primary:active:not(:disabled) {transform:translateY(0);}
+        .btn-primary:disabled {opacity:0.6; cursor:not-allowed;}
         .btn-secondary {
             background: #f5f5f5;
             color: #666;
             border: 2px solid #e0e0e0;
+            font-family: "Noto Sans", sans-serif;
         }
-
-        .btn-secondary:hover:not(:disabled) {
-            background: #eeeeee;
-            border-color: #ccc;
-        }
-
+        .btn-secondary:hover:not(:disabled) {background:#eeeeee; border-color:#ccc;}
         .loading {
             display: none;
             text-align: center;
             padding: 40px;
+            font-family: "Noto Sans", sans-serif;
+            font-size: 1.1em;
         }
-
-        .loading.active {
-            display: block;
-        }
-
+        .loading.active {display: block;}
+        .loading p {font-family: "Noto Sans", sans-serif; font-size: 1.2em;}
         .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #667eea;
@@ -151,63 +138,42 @@
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
+        @keyframes spin {0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);}}
         .results {
             display: none;
+            font-family: "Noto Sans", sans-serif;
         }
-
-        .results.active {
-            display: block;
-        }
-
+        .results.active {display: block;}
         .results-section {
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .results-section h2 {
             font-size: 1.5em;
             margin-bottom: 20px;
             color: #333;
             padding-bottom: 10px;
             border-bottom: 2px solid #e0e0e0;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .comparison-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
-        @media (max-width: 768px) {
-            .comparison-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
+        @media (max-width:768px) {.comparison-grid{grid-template-columns:1fr;}}
         .translation-card {
             background: #f8f9fa;
             border-radius: 12px;
             padding: 24px;
             border: 2px solid #e0e0e0;
             transition: all 0.3s ease;
+            font-family: "Noto Sans", sans-serif;
         }
-
-        .translation-card:hover {
-            border-color: #667eea;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-        }
-
-        .translation-card.with-context {
-            border-color: #667eea;
-            background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
-        }
-
+        .translation-card:hover {border-color:#667eea; box-shadow:0 4px 12px rgba(102,126,234,0.15);}
+        .translation-card.with-context {border-color:#667eea; background:linear-gradient(135deg,#f8f9ff 0%,#f0f4ff 100%);}
         .translation-card h3 {
             font-size: 1.1em;
             margin-bottom: 12px;
@@ -216,47 +182,40 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            font-family: "Noto Sans", sans-serif;
         }
-
-        .translation-card h3::before {
-            content: "📝";
-            font-size: 1.2em;
-        }
-
-        .translation-card.with-context h3::before {
-            content: "✨";
-        }
-
+        .translation-card h3::before {content:"📝"; font-size:1.2em;}
+        .translation-card.with-context h3::before {content:"✨";}
         .translation-text {
-            font-size: 16px;
+            font-size: 1.3em;
             line-height: 1.6;
             color: #333;
             white-space: pre-wrap;
             word-wrap: break-word;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .score-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
             color: white;
             border-radius: 12px;
             padding: 30px;
             text-align: center;
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .score-value {
-            font-size: 4em;
+            font-size: 3em;
             font-weight: 700;
             margin: 20px 0;
             text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-family: "Noto Sans", sans-serif;
         }
-
         .score-label {
             font-size: 1.2em;
             opacity: 0.95;
             margin-bottom: 20px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .explanation {
             background: white;
             color: #333;
@@ -265,8 +224,9 @@
             margin-top: 20px;
             text-align: left;
             line-height: 1.6;
+            font-size: 1.15em;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .error {
             display: none;
             background: #fee;
@@ -275,80 +235,95 @@
             padding: 20px;
             color: #c33;
             margin-bottom: 20px;
+            font-family: "Noto Sans", sans-serif;
+            font-size: 1.1em;
         }
-
-        .error.active {
-            display: block;
-        }
-
+        .error.active {display: block;}
         .source-text {
             background: #fff9e6;
             border-left: 4px solid #ffc107;
             padding: 16px;
             border-radius: 8px;
             margin-bottom: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .source-text h3 {
             color: #f57c00;
             margin-bottom: 8px;
             font-size: 1em;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .source-text p {
             color: #333;
             line-height: 1.6;
             white-space: pre-wrap;
             word-wrap: break-word;
+            font-size: 1.2em;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .items-section {
             margin-top: 30px;
+            font-family: "Noto Sans", sans-serif;
         }
-
+        .items-section h2 {
+            font-size: 1.3em;
+            font-family: "Noto Sans", sans-serif;
+            color: #333;
+            margin-bottom: 20px;
+        }
         .item-card {
             background: #f8f9fa;
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 15px;
             border-left: 4px solid #667eea;
+            font-family: "Noto Sans", sans-serif;
+            font-size: 1.1em;
         }
-
         .item-card h4 {
             color: #667eea;
             margin-bottom: 10px;
             font-size: 1.1em;
+            font-family: "Noto Sans", sans-serif;
         }
-
         .item-score {
             display: inline-block;
             background: #667eea;
             color: white;
             padding: 4px 12px;
             border-radius: 20px;
-            font-size: 0.9em;
+            font-size: 0.95em;
             font-weight: 600;
             margin-bottom: 10px;
+            font-family: "Noto Sans", sans-serif;
+        }
+        #charCount {
+            text-align: right; 
+            color: #666;
+            font-size: 1em;
+            margin-top: 4px;
+            font-family: "Noto Sans", sans-serif;
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" style="font-family: 'Noto Sans', sans-serif;">
         <div class="header">
             <h1>Translation Comparison Tool</h1>
             <p>Compare translations with and without context</p>
         </div>
-
-        <div class="content">
+        <div class="content" style="font-family: 'Noto Sans', sans-serif;">
             <div class="input-section">
-                <label for="sourceText">Source Text (Tibetan)</label>
+                <label for="sourceText">Source Text (Tibetan) <span style="color:#c33;font-size:0.9em;font-family:'Noto Sans',sans-serif;">(max 2000 characters)</span></label>
                 <textarea 
                     id="sourceText" 
-                    placeholder="Enter the Tibetan text you want to translate and compare..."
+                    maxlength="2000"
+                    style="font-family: 'Noto Sans', sans-serif; font-size: 1.5em;"
+                    placeholder="Enter  the Tibetan text you want to translate and compare..."
                     rows="6"
                 ></textarea>
+                <div id="charCount">0 / 2000</div>
             </div>
-
             <div class="button-group">
                 <button class="btn-primary" id="compareBtn" onclick="compareTranslation()">
                     Compare Translations
@@ -357,80 +332,79 @@
                     Clear
                 </button>
             </div>
-
-            <div class="error" id="errorMsg"></div>
-
-            <div class="loading" id="loading">
+            <div class="error" id="errorMsg" style="font-family: 'Noto Sans', sans-serif;"></div>
+            <div class="loading" id="loading" style="font-family: 'Noto Sans', sans-serif;">
                 <div class="spinner"></div>
                 <p>Processing translation comparison...</p>
             </div>
-
-            <div class="results" id="results">
+            <div class="results" id="results" style="font-family: 'Noto Sans', sans-serif;">
                 <div class="source-text" id="sourceDisplay">
                     <h3>Source Text</h3>
-                    <p id="sourceTextDisplay"></p>
+                    <p id="sourceTextDisplay" style="font-family: 'Noto Sans', sans-serif;"></p>
                 </div>
-
                 <div class="comparison-grid">
                     <div class="translation-card with-context">
-                        <h3>Translation with Context</h3>
-                        <div class="translation-text" id="translationWithContext"></div>
+                        <h3 style="font-family: 'Noto Sans', sans-serif;">Translation with Context</h3>
+                        <div class="translation-text" id="translationWithContext" style="font-size: 1.3em; font-family: 'Noto Sans', sans-serif;"></div>
                     </div>
-
                     <div class="translation-card">
-                        <h3>Translation without Context</h3>
-                        <div class="translation-text" id="translationWithoutContext"></div>
+                        <h3 style="font-family: 'Noto Sans', sans-serif;">Translation without Context</h3>
+                        <div class="translation-text" id="translationWithoutContext" style="font-size: 1.3em; font-family: 'Noto Sans', sans-serif;"></div>
                     </div>
                 </div>
-
                 <div class="results-section">
-                    <h2>Comparison Results</h2>
-                    <div class="score-section" id="scoreSection">
+                    <h2 style="font-family: 'Noto Sans', sans-serif;">Comparison Results</h2>
+                    <div class="score-section" id="scoreSection" style="font-family: 'Noto Sans', sans-serif;">
                         <div class="score-label">Quality Score</div>
                         <div class="score-value" id="scoreValue">-</div>
                         <div class="explanation" id="explanation"></div>
                     </div>
                 </div>
-
-                <div class="items-section" id="itemsSection"></div>
+                <div class="items-section" id="itemsSection" style="font-family: 'Noto Sans', sans-serif;"></div>
             </div>
         </div>
     </div>
-
     <script>
+        // Update character count
+        const sourceText = document.getElementById('sourceText');
+        const charCountDiv = document.getElementById('charCount');
+        function updateCharCount() {
+            const val = sourceText.value;
+            charCountDiv.textContent = (val.length || 0) + ' / 2000';
+            if (val.length > 2000) {
+                charCountDiv.style.color = "#c33";
+            } else {
+                charCountDiv.style.color = "#666";
+            }
+        }
+        sourceText.addEventListener('input', updateCharCount);
+
         async function compareTranslation() {
-            const sourceText = document.getElementById('sourceText').value.trim();
-            
-            if (!sourceText) {
+            const val = document.getElementById('sourceText').value.trim();
+            if (!val) {
                 showError('Please enter some text to translate.');
                 return;
             }
-
-            // Hide previous results and error
+            if (val.length > 2000) {
+                showError('Maximum allowed length is 2000 characters.');
+                return;
+            }
             document.getElementById('results').classList.remove('active');
             document.getElementById('errorMsg').classList.remove('active');
-            
-            // Show loading
             document.getElementById('loading').classList.add('active');
             document.getElementById('compareBtn').disabled = true;
-
             try {
                 const response = await fetch('/test/compare-translation', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ text: sourceText })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: val })
                 });
-
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ detail: 'Unknown error occurred' }));
                     throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
                 }
-
                 const data = await response.json();
-                displayResults(sourceText, data);
-                
+                displayResults(val, data);
             } catch (error) {
                 showError('Error: ' + error.message);
             } finally {
@@ -438,106 +412,90 @@
                 document.getElementById('compareBtn').disabled = false;
             }
         }
-
         function displayResults(sourceText, data) {
-            // Display source text
             document.getElementById('sourceTextDisplay').textContent = sourceText;
-            
-            // Handle different response structures
             let translationWithContext = '';
             let translationWithoutContext = '';
             let score = null;
             let explanation = '';
             let items = [];
-
-            // Check if data has items (TranslationList structure)
             if (data.items && Array.isArray(data.items)) {
                 items = data.items;
                 if (items.length > 0) {
-                    // Use first item for main display
                     const firstItem = items[0];
                     const secondItem = items[1];
                     translationWithContext = firstItem.translation || '';
-                    translationWithoutContext=secondItem.translation || '';
+                    translationWithoutContext = secondItem ? (secondItem.translation || '') : '';
                     score = firstItem.score || null;
                     explanation = firstItem.explanation || '';
                 }
-            } 
-            // Check for direct fields (TranslationComparisonResult structure)
-            else {
+            } else {
                 translationWithContext = data.translation_with_context || '';
                 translationWithoutContext = data.translation_without_context || '';
                 score = data.comparison_score || data.score || null;
                 explanation = data.explanation || '';
-                
-                if (data.items) {
-                    items = Array.isArray(data.items) ? data.items : [];
-                }
+                if (data.items) { items = Array.isArray(data.items) ? data.items : []; }
             }
-
-            // Display translations
-            document.getElementById('translationWithContext').textContent = 
-                translationWithContext || 'Not available';
-            document.getElementById('translationWithoutContext').textContent = 
-                translationWithoutContext || 'Not available';
-
-            // Display score
+            // Output in Noto Sans font and set size as in CSS
+            document.getElementById('translationWithContext').textContent = translationWithContext || 'Not available';
+            document.getElementById('translationWithContext').style.fontFamily = "'Noto Sans', sans-serif";
+            document.getElementById('translationWithContext').style.fontSize = "1.3em";
+            document.getElementById('translationWithoutContext').textContent = translationWithoutContext || 'Not available';
+            document.getElementById('translationWithoutContext').style.fontFamily = "'Noto Sans', sans-serif";
+            document.getElementById('translationWithoutContext').style.fontSize = "1.3em";
             if (score !== null) {
                 document.getElementById('scoreValue').textContent = score;
             } else {
                 document.getElementById('scoreValue').textContent = 'N/A';
             }
-
-            // Display explanation
-            document.getElementById('explanation').textContent = 
-                explanation || 'No explanation provided.';
-
-            // Display items if available
+            document.getElementById('scoreValue').style.fontFamily = "'Noto Sans', sans-serif";
+            document.getElementById('scoreValue').style.fontSize = "3em";
+            document.getElementById('explanation').textContent = explanation || 'No explanation provided.';
+            document.getElementById('explanation').style.fontFamily = "'Noto Sans', sans-serif";
+            document.getElementById('explanation').style.fontSize = "1.15em";
             const itemsSection = document.getElementById('itemsSection');
             if (items.length > 0) {
-                itemsSection.innerHTML = '<h2>Detailed Comparison Items</h2>';
+                itemsSection.innerHTML = '<h2 style="font-family:\'Noto Sans\',sans-serif;font-size:1.3em;color:#333;margin-bottom:20px;">Detailed Comparison Items</h2>';
                 items.forEach((item, index) => {
                     const itemCard = document.createElement('div');
                     itemCard.className = 'item-card';
+                    itemCard.style.fontFamily = "'Noto Sans', sans-serif";
+                    itemCard.style.fontSize = "1.1em";
                     itemCard.innerHTML = `
-                        <h4>Translation Option ${index + 1}</h4>
-                        ${item.score !== undefined ? `<span class="item-score">Score: ${item.score}</span>` : ''}
-                        <p><strong>Translation:</strong> ${item.translation || 'N/A'}</p>
-                        ${item.explanation ? `<p><strong>Explanation:</strong> ${item.explanation}</p>` : ''}
+                        <h4 style="font-family:'Noto Sans',sans-serif;">Translation Option ${index + 1}</h4>
+                        ${item.score !== undefined ? `<span class="item-score" style="font-family:'Noto Sans',sans-serif;">Score: ${item.score}</span>` : ''}
+                        <p style="font-family:'Noto Sans',sans-serif;"><strong>Translation:</strong> ${item.translation || 'N/A'}</p>
+                        ${item.explanation ? `<p style="font-family:'Noto Sans',sans-serif;"><strong>Explanation:</strong> ${item.explanation}</p>` : ''}
                     `;
                     itemsSection.appendChild(itemCard);
                 });
             } else {
                 itemsSection.innerHTML = '';
             }
-
-            // Show results
             document.getElementById('results').classList.add('active');
-            
-            // Scroll to results
             document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-
         function showError(message) {
             const errorDiv = document.getElementById('errorMsg');
             errorDiv.textContent = message;
             errorDiv.classList.add('active');
+            errorDiv.style.fontFamily = "'Noto Sans', sans-serif";
+            errorDiv.style.fontSize = "1.1em";
         }
-
         function clearAll() {
             document.getElementById('sourceText').value = '';
+            updateCharCount();
             document.getElementById('results').classList.remove('active');
             document.getElementById('errorMsg').classList.remove('active');
             document.getElementById('loading').classList.remove('active');
         }
-
-        // Allow Enter key to submit (Ctrl+Enter or Cmd+Enter)
         document.getElementById('sourceText').addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                 compareTranslation();
             }
         });
+        // Show initial count
+        updateCharCount();
     </script>
 </body>
 </html>
-
