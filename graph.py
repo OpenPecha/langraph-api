@@ -241,7 +241,7 @@ def extract_glossaries_in_parallel(state: TranslationWorkflowState) -> Translati
             prompt_text = GLOSSARY_EXTRACTION_POST_TRANSLATION_PROMPT.format(
                 text_pairs=f"Source: {result.original_text}\\nTranslated: {result.translated_text}\\n\\n"
             )
-            prompts.append(HumanMessage(content=prompt_text))
+            prompts.append(prompt_text)
 
         # Batch the prompts to avoid sending too many at once
         batch_size = state["original_request"].batch_size
